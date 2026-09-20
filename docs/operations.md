@@ -47,8 +47,8 @@ tunnel-client help quickstart
 tunnel-client profiles samples list
 ~~~
 
-ローカルで生成した実プロファイルは profiles/local/ に置きます。
-このディレクトリはGit管理外です。
+ローカルで生成した実プロファイルは `~/.config/local-mcp/tunnel-profiles/` に置きます。
+リポジトリ外なのでGit管理されません。
 共有したい内容は、秘密情報を除いた説明や生成手順として profiles/README.md に残します。
 
 ## DevSpaceをSecure MCP Tunnelへ移したい
@@ -99,7 +99,8 @@ ChatGPTから出力を読み直し、続きが必要なterminalだけ `orca_atta
 
 ~~~bash
 tunnel-client runtimes status orca-mcp --json
-tunnel-client doctor --profile devspace-mcp --explain
+tunnel-client runtimes status devspace-mcp --json
+tunnel-client doctor --profile-dir "$HOME/.config/local-mcp/tunnel-profiles" --profile devspace-mcp --explain
 ~~~
 
 ## 用語

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -u
 
+PROFILE_DIR="${LOCAL_MCP_PROFILE_DIR:-$HOME/.config/local-mcp/tunnel-profiles}"
+
 echo "== local-mcp status =="
 echo
 
@@ -37,7 +39,7 @@ if command -v tunnel-client >/dev/null 2>&1; then
   tunnel-client --version 2>/dev/null || echo "version unavailable"
   echo
   printf "Secure MCP Tunnel profiles: "
-  if profiles_json="$(tunnel-client profiles list --json 2>/dev/null)"; then
+  if profiles_json="$(tunnel-client profiles list --profile-dir "$PROFILE_DIR" --json 2>/dev/null)"; then
     printf "%s configured\n" "$(printf "%s" "$profiles_json" | jq 'length')"
   else
     echo "status unavailable"

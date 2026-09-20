@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -u
 
+PROFILE_DIR="${LOCAL_MCP_PROFILE_DIR:-$HOME/.config/local-mcp/tunnel-profiles}"
+
 echo "== local-mcp doctor =="
 echo
 
@@ -42,7 +44,7 @@ if command -v tunnel-client >/dev/null 2>&1; then
   if ! command -v jq >/dev/null 2>&1; then
     echo "jq: not installed"
     failed=1
-  elif ! profiles_json="$(tunnel-client profiles list --json 2>/dev/null)"; then
+  elif ! profiles_json="$(tunnel-client profiles list --profile-dir "$PROFILE_DIR" --json 2>/dev/null)"; then
     echo "Secure MCP Tunnel: profile一覧を取得できません"
     failed=1
   elif [[ "$(printf "%s" "$profiles_json" | jq 'length')" -eq 0 ]]; then
@@ -50,7 +52,7 @@ if command -v tunnel-client >/dev/null 2>&1; then
   else
     count="$(printf "%s" "$profiles_json" | jq 'length')"
     echo "Secure MCP Tunnel: $count profile configured"
-    echo "詳細診断は対象profileを指定して tunnel-client doctor --profile <name> --explain を実行します。"
+    echo "詳細診断は対象profileを指定して tunnel-client doctor --profile-dir "$PROFILE_DIR" --profile <name> --explain を実行します。"
   fi
 else
   echo "tunnel-client: not installed (migration not started)"

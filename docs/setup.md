@@ -55,6 +55,7 @@ unset LOCAL_MCP_RUNTIME_KEY
 
 export ORCA_TUNNEL_ID='tunnel_...'
 export DEVSPACE_TUNNEL_ID='tunnel_...'
+export LOCAL_MCP_PROFILE_DIR="$HOME/.config/local-mcp/tunnel-profiles"
 ~~~
 
 Tunnel IDは秘密情報ではありませんが、このリポジトリにはコミットしません。
@@ -71,6 +72,7 @@ LOCAL_MCP_ROOT="$(git rev-parse --show-toplevel)"
 tunnel-client runtimes connect \
   --alias orca-mcp \
   --profile orca-mcp \
+  --profile-dir "$LOCAL_MCP_PROFILE_DIR" \
   --tunnel-id "$ORCA_TUNNEL_ID" \
   --runtime-api-key "file:$HOME/.config/local-mcp/runtime-api-key" \
   --mcp-command "node $LOCAL_MCP_ROOT/apps/orca-mcp/dist/index.js" \
@@ -91,25 +93,31 @@ attach対象はOrcaがOMP / OpenCode / Codexとして認識しているterminal�
 ## DevSpaceはOAuth込みで確認する
 
 DevSpaceは `http://127.0.0.1:7676/mcp` で動作し、OAuthで保護されています。
-tunnel-client が用意するDCR向けサンプルからプロファイルを生成します。
+Orcaと同じく `runtimes connect` で管理対象runtimeとして起動します。
 
 ~~~bash
-tunnel-client init \
-  --sample sample_mcp_with_dcr \
+tunnel-client runtimes connect \
+  --alias devspace-mcp \
   --profile devspace-mcp \
+  --profile-dir "$LOCAL_MCP_PROFILE_DIR" \
   --tunnel-id "$DEVSPACE_TUNNEL_ID" \
+  --runtime-api-key "file:$HOME/.config/local-mcp/runtime-api-key" \
   --mcp-server-url http://127.0.0.1:7676/mcp \
-  --control-plane-api-key-ref "file:$HOME/.config/local-mcp/runtime-api-key"
+  --json
 
-tunnel-client doctor --profile devspace-mcp --explain
+tunnel-client runtimes status devspace-mcp --json
+tunnel-client doctor \
+  --profile-dir "$LOCAL_MCP_PROFILE_DIR" \
+  --profile devspace-mcp \
+  --explain
 ~~~
 
-loopback HTTPのOAuth discoveryで追加設定が必要な場合は、doctorの結果と、
-現在インストールされている tunnel-client の設定リファレンスを正本にして調整します。
-古い手順からフラグを推測して追加しません。
+Secure MCP Tunnelは、DevSpaceが返すProtected Resource MetadataのResource URLや
+token / registration endpointをTunnel向けに中継します。
+そのため、Secure MCP Tunnel専用のResource URLをDevSpaceへ手作業で追加する必要はありません。
 
-DevSpace側ではSecure Tunnelが使う正確なMCP Resource URLを `oauth.allowedResourceUrls` に追加する必要があります。
-このURLはTunnel作成後の実値を確認して設定し、推測で組み立てません。
+ただしブラウザで開くOAuthのauthorization endpointはTunnelへ置き換わりません。
+DevSpaceの認可画面だけは、ChatGPTからブラウザで到達できる公開URLが必要です。
 
 ## DevSpaceのTailscale Funnelは最後に止める
 
@@ -122,7 +130,8 @@ Secure MCP TunnelはMCP本体への経路を非公開にできますが、OAuth�
 2. ChatGPTからDevSpaceのOAuth認証を完了できる。
 3. 読み取りと安全なテスト操作がSecure MCP Tunnel経由で成功する。
 
-この確認後に、Funnelを完全停止できるか、OAuth認可用の最小公開面だけ残すかを判断します。
+この確認後に、Funnelを完全停止するのではなく、
+OAuth認可用の最小公開面だけに絞れるかを判断します。
 
 ## 問題が起きたら秘密値を出さずに診断する
 
@@ -130,7 +139,8 @@ Secure MCP TunnelはMCP本体への経路を非公開にできますが、OAuth�
 ./scripts/status.sh
 ./scripts/doctor.sh
 tunnel-client runtimes status orca-mcp --json
-tunnel-client doctor --profile devspace-mcp --explain
+tunnel-client runtimes status devspace-mcp --json
+tunnel-client doctor --profile-dir "$HOME/.config/local-mcp/tunnel-profiles" --profile devspace-mcp --explain
 ~~~
 
 API key、OAuth token、パスワードはChatGPTへ貼り付けません。
