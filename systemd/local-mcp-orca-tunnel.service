@@ -5,7 +5,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/bin/bash -c 'source "$HOME/.nvm/nvm.sh" && exec "$HOME/.local/bin/tunnel-client" run --profile-dir "$HOME/.config/local-mcp/tunnel-profiles" --profile orca-mcp'
+ExecStart=/bin/bash -c 'source "$HOME/.nvm/nvm.sh" && export ORCA_CLI_COMMAND="${ORCA_CLI_COMMAND:-$HOME/.local/bin/orca-ide}" && exec "$HOME/.local/bin/tunnel-client" run --profile-dir "$HOME/.config/local-mcp/tunnel-profiles" --profile orca-mcp'
 Restart=always
 RestartSec=5
 UMask=0077
