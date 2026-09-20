@@ -54,11 +54,14 @@ tunnel-client profiles samples list
 ## DevSpaceをSecure MCP Tunnelへ移したい
 
 DevSpaceは現在OAuthを使っています。
-HTTP/OAuth向けの sample_mcp_with_dcr からプロファイルを生成し、
-まずSecure MCP Tunnel経由でtool discoveryと実行が通ること、その後ChatGPTからOAuthを含めて再接続できることを確認します。
+OAuthは外しません。
+DevSpace本体にOAuthなしモードがなく、独自パッチで外すと高権限MCPの誤公開リスクと保守コストが増えるためです。
 
-既存のTailscale Funnel停止は最後です。
-Secure MCP Tunnel経由で同じ操作ができると確認するまでは残します。
+現在は移行中のため、`devspace-mcp` の上流も既存Tailscale Funnelです。
+ChatGPT ConnectorでOAuthとtool callを確認した後、MCP本体をlocalhostへ戻します。
+
+最終的なFunnelはDevSpace全体を公開せず、`/authorize` のGET/POSTだけを通す認可専用入口にします。
+現在地と切り替え条件は [DevSpaceの認証設計](devspace-auth.md) を確認してください。
 
 ## Orca MCPを使いたい
 

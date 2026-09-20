@@ -4,7 +4,8 @@
 
 最初の対象はDevSpaceとOrcaです。
 DevSpaceは汎用的なローカル操作、Orcaは普段の開発画面とOMP・OpenCodeの操作に使います。
-ChatGPTからローカル環境へ入る経路は、最終的にOpenAI Secure MCP Tunnelへ寄せます。
+ChatGPTからローカル環境へ入る経路は、OpenAI Secure MCP Tunnelへ寄せます。
+DevSpaceだけはOAuthのブラウザ認可画面が必要なため、最終的にも認可画面だけ公開経路を残します。
 
 ## 最初はREADMEと設計だけ読めばよい
 
@@ -19,8 +20,13 @@ ChatGPT
    └─ Secure MCP Tunnel ─ orca-mcp ─ Orca ─ OMP / OpenCode
 ~~~
 
-現時点ではローカル側のPoCまで完了しています。
-既存のTailscale Funnelは停止せず、Secure MCP Tunnelの疎通とDevSpaceのOAuthを確認してから切り替えます。
+Orca MCPはSecure MCP Tunnel経由で稼働しています。
+DevSpace MCPはOAuth連携を調整中です。
+
+現在のDevSpaceは移行中のため、Secure MCP Tunnelから既存Tailscale Funnelへ接続しています。
+これは最終構成ではありません。
+最終的にはMCP本体をlocalhostへ戻し、Funnelの公開範囲をOAuthの `/authorize` だけへ絞ります。
+詳しい判断理由は [DevSpaceの認証設計](docs/devspace-auth.md) にまとめています。
 
 ## 役割ごとに置き場所を分ける
 

@@ -90,10 +90,14 @@ ChatGPT側ではSecure MCP Tunnelを使う接続先として、Orca用Tunnel ID�
 attach対象はOrcaがOMP / OpenCode / Codexとして認識しているterminalに限ります。
 既存terminalの終了だけはChatGPTから行いません。
 
-## DevSpaceはOAuth込みで確認する
+## DevSpaceはまず暫定経路でOAuthを確認する
 
 DevSpaceは `http://127.0.0.1:7676/mcp` で動作し、OAuthで保護されています。
-Orcaと同じく `runtimes connect` で管理対象runtimeとして起動します。
+最終的にはこのlocalhost URLをSecure MCP Tunnelの上流にします。
+
+ただし2026-09-20時点の `tunnel-client 0.0.14` では、
+managed runtimeでlocalhost MCPと別originのOAuth serverを組み合わせる運用が安定しないため、
+現在は既存FunnelのMCP URLを暫定的に上流にしています。
 
 ~~~bash
 tunnel-client runtimes connect \
@@ -102,7 +106,7 @@ tunnel-client runtimes connect \
   --profile-dir "$LOCAL_MCP_PROFILE_DIR" \
   --tunnel-id "$DEVSPACE_TUNNEL_ID" \
   --runtime-api-key "file:$HOME/.config/local-mcp/runtime-api-key" \
-  --mcp-server-url http://127.0.0.1:7676/mcp \
+  --mcp-server-url https://<現在のDevSpace-Funnel-origin>/mcp \
   --json
 
 tunnel-client runtimes status devspace-mcp --json
@@ -112,26 +116,27 @@ tunnel-client doctor \
   --explain
 ~~~
 
-Secure MCP Tunnelは、DevSpaceが返すProtected Resource MetadataのResource URLや
-token / registration endpointをTunnel向けに中継します。
-そのため、Secure MCP Tunnel専用のResource URLをDevSpaceへ手作業で追加する必要はありません。
+この状態でChatGPTのDevSpace MCP ConnectorをOAuthとして追加し、
+Owner passwordによる認可、tool discovery、実際のtool callまで確認します。
 
-ただしブラウザで開くOAuthのauthorization endpointはTunnelへ置き換わりません。
-DevSpaceの認可画面だけは、ChatGPTからブラウザで到達できる公開URLが必要です。
+詳細な理由は [DevSpaceの認証設計](devspace-auth.md) を参照してください。
 
-## DevSpaceのTailscale Funnelは最後に止める
+## OAuth確認後にMCP本体をlocalhostへ戻す
 
-現在のDevSpaceは、ブラウザで行うOAuth認可のために `publicBaseUrl` を使っています。
-Secure MCP TunnelはMCP本体への経路を非公開にできますが、OAuthの認可画面まで自動的に非公開化するものではありません。
+OAuthが通った後、Tunnel Clientが別origin OAuthを正式に扱える構成へ移します。
+その段階で `devspace-mcp` の上流を次へ変更します。
 
-次の3点を確認するまでは既存Funnelを残します。
+~~~text
+http://127.0.0.1:7676/mcp
+~~~
 
-1. Secure MCP Tunnel経由でDevSpaceのtool discoveryが成功する。
-2. ChatGPTからDevSpaceのOAuth認証を完了できる。
-3. 読み取りと安全なテスト操作がSecure MCP Tunnel経由で成功する。
+その後、Tailscale FunnelはDevSpace全体ではなく認可専用proxyへ向けます。
+公開するのは `GET /authorize` と `POST /authorize` だけです。
 
-この確認後に、Funnelを完全停止するのではなく、
-OAuth認可用の最小公開面だけに絞れるかを判断します。
+切り替え前後の確認項目は [DevSpaceの認証設計](devspace-auth.md) にまとめています。
+
+Funnelを完全停止することは現行OAuth仕様では目標にしません。
+ブラウザのAuthorization endpointだけは公開HTTPS URLが必要です。
 
 ## 問題が起きたら秘密値を出さずに診断する
 

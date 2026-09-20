@@ -1,4 +1,4 @@
-# MCP本体は公開せず、OpenAIへの外向き接続だけを持つ
+# MCP本体は公開せず、DevSpaceの認可画面だけ外へ出す
 
 ## DevSpaceは汎用、Orcaはコーディング専用に分ける
 
@@ -19,11 +19,17 @@ ChatGPT Web / Mobile / Desktop
        │             │
        ▼             ▼
     DevSpace       orca-mcp
-                      │
-                      ▼
-                    Orca
-                  /      \
-                OMP    OpenCode
+  127.0.0.1           │
+       │               ▼
+       │             Orca
+       │           /      \
+       │         OMP    OpenCode
+       │
+       └── OAuthの認可画面だけ
+             Tailscale Funnel
+                 │
+                 ▼
+             /authorize
 ~~~
 
 tunnel-client はOpenAI公式の外部依存として利用し、このリポジトリへソースを取り込みません。
@@ -78,13 +84,47 @@ ChatGPTがOMPやOpenCodeへ送った指示と、その結果をOrca側から確�
 
 この方式ではOrcaが作業画面、Secure MCP Tunnelが接続経路、orca-mcpが権限を絞る変換層になります。
 
-## 既存Funnelは移行完了まで残す
+## DevSpaceのOAuthは外さない
 
-現在のDevSpaceはTailscale Funnelで 127.0.0.1:7676 を公開しています。
-Secure MCP Tunnelが正常に動くことを確認する前に、この経路は停止しません。
+DevSpace 1.1.0-beta.4では、OAuthは任意機能ではありません。
+設定スキーマに無効化項目がなく、サーバー起動時にOAuth providerとBearer認証が常に組み込まれます。
+現在のmainブランチの設定資料も同じ前提です。
 
-DevSpaceは独自OAuthを持つため、MCP本体の疎通だけでなく、ChatGPTからの認証フローまで確認してから切り替えます。
-認証のために追加の複雑なプロキシが必要になる場合は、無理に統一せず現行構成を残します。
+OAuthを外すにはDevSpace本体へ独自パッチが必要です。
+DevSpaceはshellやファイル操作をローカルユーザー権限で実行できるため、
+認証なしモードを独自追加すると、将来の設定変更や誤公開がそのまま高権限のリモート操作につながります。
+このリポジトリではDevSpace本体をforkしない方針とも合わないため、OAuth無効化案は採用しません。
+
+詳しい検討結果と移行条件は [DevSpaceの認証設計](devspace-auth.md) を正本にします。
+
+## DevSpaceの最終構成ではMCP本体をlocalhostへ戻す
+
+OpenAI Secure MCP Tunnelは、OAuth保護されたMCPの
+Protected Resource Metadata、registration、token、revocationを中継できます。
+一方、ブラウザで開く `authorization_endpoint` は中継しません。
+
+そのため最終構成は次の分担にします。
+
+| 経路 | 公開範囲 |
+| --- | --- |
+| ChatGPT → DevSpace MCP | Secure MCP Tunnel → `127.0.0.1:7676/mcp` |
+| OAuth metadata / register / token / revoke | Secure MCP Tunnel / Harpoon |
+| OAuth認可画面 | Tailscale Funnel → `/authorize` のGET/POSTだけ |
+| DevSpaceのその他のHTTP route | Internetへ公開しない |
+
+認可画面はDevSpace自身がHTMLを返し、フォームも同じ `/authorize` へPOSTします。
+外部assetを必要としないため、公開面をこのrouteへ限定できます。
+
+## 現在はFunnel全体を上流にする暫定構成
+
+2026-09-20時点の `tunnel-client 0.0.14` では、
+managed runtimeの `runtimes connect` が生成するprofileに
+別originのOAuth trust設定を保持できません。
+そのため現在の `devspace-mcp` は、暫定的に既存Funnelの `/mcp` を上流にしています。
+
+これは接続確認のための移行状態です。
+DevSpaceの公開範囲を増やしたものではありませんが、MCP本体も引き続きFunnelから到達できるため、
+最終状態として固定しません。
 
 ## 外部依存は改造せず追従する
 
