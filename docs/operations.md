@@ -39,8 +39,8 @@ organization contextは `~/.config/local-mcp/tunnel.env` にあります。
 
 ChatGPT側で `tunnel_active_organization_required` が出る場合は、
 まず `doctor.sh` でローカルruntimeのorganization contextが設定済みか確認します。
-ローカル側が正常でもChatGPTから同じエラーになる事象は、
-2026-09-20時点でopenai/tunnel-clientのIssue #61として報告されています。
+ローカル側が正常でもChatGPTから同じエラーになる類似事象は、
+2026-09-20時点でopenai/tunnel-clientのIssue #60として報告されています。
 この場合はローカル設定を増やして回避せず、Connector側の再接続またはupstream修正を確認します。
 
 ## DevSpace Localだけ接続できない → DevSpaceとFunnelを見る
