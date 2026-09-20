@@ -30,7 +30,7 @@ async function createFakeOrca(): Promise<{
     "  const terminal = index >= 0 ? args[index + 1] : '';",
     "  if (terminal === 'term_existing_agent' || terminal === 'term_recovered') {",
     "    const handle = terminal;",
-    "    payload = { ok: true, result: { terminal: { handle: 'term_existing_agent', worktreeId: 'repo::/tmp/project', worktreePath: '/tmp/project', branch: 'refs/heads/main', title: 'OpenCode', connected: true, writable: true, agentIdentity: 'opencode' } } };",
+    "    payload = { ok: true, result: { terminal: { handle: 'term_existing_agent', worktreeId: 'repo::/tmp/project', worktreePath: '/tmp/project', branch: 'refs/heads/main', title: 'OpenCode', connected: true, writable: true, lastOutputAt: 1789910066129, agentIdentity: 'opencode' } } };",
     "    payload.result.terminal.handle = handle;",
     "  } else {",
     "    payload = { ok: true, result: { terminal: { handle: 'term_shell', worktreeId: 'repo::/tmp/project', worktreePath: '/tmp/project', branch: 'refs/heads/main', title: 'shell', connected: true, writable: true } } };",
@@ -41,7 +41,7 @@ async function createFakeOrca(): Promise<{
     "  if (fs.existsSync(parallelMarker)) worktrees.push({ id: 'repo::/tmp/parallel-task', repoId: 'repo', path: '/tmp/parallel-task', branch: 'refs/heads/parallel-task', displayName: 'parallel-task', workspaceStatus: 'in-progress', parentWorktreeId: null });",
     "  payload = { ok: true, result: { worktrees } };",
     "} else if (key === 'terminal list') {",
-    "  payload = { ok: true, result: { terminals: [{ handle: 'term_recovered', worktreeId: 'repo::/tmp/recover-task', worktreePath: '/tmp/recover-task', branch: 'refs/heads/recover-task', title: 'OpenCode', connected: true, writable: true, agentIdentity: 'opencode' }] } };",
+    "  payload = { ok: true, result: { terminals: [{ handle: 'term_recovered', worktreeId: 'repo::/tmp/recover-task', worktreePath: '/tmp/recover-task', branch: 'refs/heads/recover-task', title: 'OpenCode', connected: true, writable: true, lastOutputAt: 1789910066129, agentIdentity: 'opencode' }] } };",
     "} else if (key === 'terminal read') {",
     "  const index = args.indexOf('--terminal');",
     "  const handle = index >= 0 ? args[index + 1] : 'term_unknown';",
@@ -224,6 +224,30 @@ test("stdioで起動し、既存agentの引き継ぎと新規agent起動を扱�
       result: { worktrees: [] },
     });
     assert.deepEqual(JSON.parse((listed.content?.[0] as { text: string }).text), listed.structuredContent);
+
+    const shown = await client.callTool({
+      name: "orca_show_terminal",
+      arguments: {
+        terminal: "term_existing_agent",
+      },
+    });
+    assert.notEqual(shown.isError, true);
+    assert.deepEqual(shown.structuredContent, {
+      ok: true,
+      result: {
+        terminal: {
+          handle: "term_existing_agent",
+          worktreeId: "repo::/tmp/project",
+          worktreePath: "/tmp/project",
+          branch: "refs/heads/main",
+          title: "OpenCode",
+          connected: true,
+          writable: true,
+          lastOutputAt: 1789910066129,
+          agentIdentity: "opencode",
+        },
+      },
+    });
 
     const blocked = await client.callTool({
       name: "orca_send_terminal",

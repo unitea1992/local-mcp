@@ -12,6 +12,10 @@ const ATTACHABLE_AGENT_IDENTITIES = new Set([
 ]);
 
 const nullableString = z.string().nullable().optional();
+const nullableTimestamp = z
+  .union([z.string(), z.number().int().nonnegative()])
+  .nullable()
+  .optional();
 
 const worktreeSchema = z.object({
   id: z.string().optional(),
@@ -34,7 +38,7 @@ const terminalSchema = z.object({
   connected: z.boolean().optional(),
   writable: z.boolean().optional(),
   orphaned: z.boolean().optional(),
-  lastOutputAt: nullableString,
+  lastOutputAt: nullableTimestamp,
   executionHostId: nullableString,
   agentIdentity: nullableString,
 });
