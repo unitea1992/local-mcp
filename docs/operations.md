@@ -41,7 +41,12 @@ ChatGPT側で `tunnel_active_organization_required` が出る場合は、
 まず `doctor.sh` でローカルruntimeのorganization contextが設定済みか確認します。
 ローカル側が正常でもChatGPTから同じエラーになる類似事象は、
 2026-09-20時点でopenai/tunnel-clientのIssue #60として報告されています。
-この場合はローカル設定を増やして回避せず、Connector側の再接続またはupstream修正を確認します。
+この環境ではChatGPT側のOrca MCP設定からOrganization選択だけを外し、
+Workspace紐付けを残して保存すると実呼び出しが復旧しました。
+Platform APIで取得するTunnel metadata自体はOrganization + Workspaceの両方を保持したままで、
+ローカルruntimeの `CONTROL_PLANE_ORGANIZATION_ID` も引き続き必要です。
+そのため同じエラー時はローカルorganization contextを消さず、
+まずChatGPT側ConnectorのOrganization選択を確認します。
 
 ## DevSpace Localだけ接続できない → DevSpaceとFunnelを見る
 
@@ -62,6 +67,11 @@ DevSpaceはSecure MCP Tunnelを使いません。
 まずworktreeとterminalを確認し、必要なterminalの出力を読みます。
 書き込みが必要な場合だけ `orca_attach_terminal` を実行し、その後 `orca_send_terminal` を使います。
 
+OMP / OpenCode / CodexのようなTUIの現在表示を確認する場合は、
+`orca_read_terminal` に `screen=true` を指定します。
+通常の蓄積ログを追う場合は既定のstream読み取りを使い、cursorで差分を取得します。
+`screen=true` とcursorは同時指定しません。
+
 Secure MCP Tunnelやorca-mcpが再起動してもOrcaのterminalは残ります。
 再起動後は対象terminalを読み直し、必要なら再度attachします。
 
@@ -69,6 +79,11 @@ Secure MCP Tunnelやorca-mcpが再起動してもOrcaのterminalは残ります�
 
 `orca_create_agent_worktree` を使い、worktreeとOMP / OpenCode / Codexをまとめて作ります。
 既存worktreeに新しいagentが必要な場合はOrca側から起動し、そのterminalをChatGPTからattachします。
+
+Orca 1.4.205 + OpenCode 2.0.11では、Orca生成のOpenCode status pluginが旧契約のため
+`1 plugin failed /plugins` と表示される既知事象があります。
+OpenCode本体の起動、terminal read/send、TUI待機は実機で動作確認済みです。
+生成pluginへ手修正は入れず、Orca upstreamの修正を待ちます。
 
 ## tunnel-clientを更新する
 
