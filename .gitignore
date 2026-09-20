@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+.rumdl_cache/
+*.log
+.env
+.env.*
+!.env.example
+profiles/*.yaml
+!profiles/*.example.yaml
+profiles/local/

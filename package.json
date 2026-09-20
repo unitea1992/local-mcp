@@ -1,0 +1,19 @@
+{
+  "name": "local-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.25.0",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "pnpm --filter @local-mcp/orca-mcp build",
+    "typecheck": "pnpm --filter @local-mcp/orca-mcp typecheck",
+    "test": "pnpm --filter @local-mcp/orca-mcp test",
+    "md:check": "rumdl check .",
+    "md:fmt": "rumdl fmt .",
+    "check": "pnpm typecheck && pnpm build && pnpm test && pnpm md:check"
+  }
+}
+
