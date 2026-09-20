@@ -2,6 +2,26 @@
 set -u
 
 PROFILE_DIR="${LOCAL_MCP_PROFILE_DIR:-$HOME/.config/local-mcp/tunnel-profiles}"
+RUNTIME_ENV="$HOME/.config/local-mcp/tunnel.env"
+
+if [[ -f "$RUNTIME_ENV" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  . "$RUNTIME_ENV"
+  set +a
+fi
+
+systemctl_user() {
+  local runtime_dir
+  runtime_dir="/run/user/$(id -u)"
+  if [[ -S "$runtime_dir/bus" ]]; then
+    DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime_dir/bus" \
+      XDG_RUNTIME_DIR="$runtime_dir" \
+      systemctl --user "$@"
+    return
+  fi
+  systemctl --user "$@"
+}
 
 echo "== local-mcp doctor =="
 echo
@@ -28,10 +48,12 @@ fi
 echo
 echo "-- Orca --"
 if command -v orca-ide >/dev/null 2>&1; then
-  orca-ide repo list --json >/dev/null 2>&1 && echo "Orca CLI: OK" || {
+  if orca-ide repo list --json >/dev/null 2>&1; then
+    echo "Orca CLI: OK"
+  else
     echo "Orca CLI: NG"
     failed=1
-  }
+  fi
 else
   echo "Orca CLI: not installed"
   failed=1
@@ -53,6 +75,12 @@ if command -v tunnel-client >/dev/null 2>&1; then
   else
     count="$(printf "%s" "$profiles_json" | jq 'length')"
     echo "Secure MCP Tunnel: $count profile configured"
+    if [[ -n "${CONTROL_PLANE_ORGANIZATION_ID:-}" ]]; then
+      echo "Orca MCP organization context: configured"
+    else
+      echo "Orca MCP organization context: missing"
+      failed=1
+    fi
     if tunnel-client doctor --profile-dir "$PROFILE_DIR" --profile orca-mcp >/dev/null 2>&1; then
       echo "Orca MCP Tunnel profile: OK"
     else
@@ -65,7 +93,7 @@ else
   failed=1
 fi
 
-if systemctl --user is-active --quiet local-mcp-orca-tunnel.service 2>/dev/null; then
+if systemctl_user is-active --quiet local-mcp-orca-tunnel.service 2>/dev/null; then
   echo "Orca MCP Tunnel service: active"
 else
   echo "Orca MCP Tunnel service: inactive"

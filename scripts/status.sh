@@ -3,6 +3,18 @@ set -u
 
 PROFILE_DIR="${LOCAL_MCP_PROFILE_DIR:-$HOME/.config/local-mcp/tunnel-profiles}"
 
+systemctl_user() {
+  local runtime_dir
+  runtime_dir="/run/user/$(id -u)"
+  if [[ -S "$runtime_dir/bus" ]]; then
+    DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime_dir/bus" \
+      XDG_RUNTIME_DIR="$runtime_dir" \
+      systemctl --user "$@"
+    return
+  fi
+  systemctl --user "$@"
+}
+
 echo "== local-mcp status =="
 echo
 
@@ -46,7 +58,7 @@ if command -v tunnel-client >/dev/null 2>&1; then
   fi
   echo
   printf "Orca Tunnel service: "
-  if systemctl --user is-active --quiet local-mcp-orca-tunnel.service 2>/dev/null; then
+  if systemctl_user is-active --quiet local-mcp-orca-tunnel.service 2>/dev/null; then
     echo "active"
   else
     echo "inactive"

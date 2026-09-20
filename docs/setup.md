@@ -62,6 +62,13 @@ tunnel-client init \
 
 このスクリプトは旧tmux runtimeを停止し、
 `~/.config/systemd/user/local-mcp-orca-tunnel.service` をインストールして有効化します。
+同時にTunnel metadataからorganization IDを取得し、
+`~/.config/local-mcp/tunnel.env` へ `CONTROL_PLANE_ORGANIZATION_ID` として保存します。
+この値はGitへ入れず、systemd serviceだけが読み込みます。
+
+`tunnel-client 0.0.14` では、organizationへ関連付けたTunnelを長寿命runtimeから使う場合、
+organization contextを明示しておくと認可エラーを切り分けやすくなります。
+既知のTunnel IDに対するmetadata取得には、同じRestricted runtime keyを使います。
 
 確認は次で行います。
 
