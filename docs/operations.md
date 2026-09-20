@@ -63,6 +63,11 @@ ChatGPT ConnectorでOAuthとtool callを確認した後、MCP本体をlocalhost�
 最終的なFunnelはDevSpace全体を公開せず、`/authorize` のGET/POSTだけを通す認可専用入口にします。
 現在地と切り替え条件は [DevSpaceの認証設計](devspace-auth.md) を確認してください。
 
+OAuth認可で `Invalid or missing OAuth resource` が出た場合は、
+まずDevSpaceの `oauth.allowedResourceUrls` を確認します。
+ChatGPTが使うTunnel MCP resource URLが完全一致で登録されている必要があります。
+host全体やワイルドカードでは許可しません。
+
 ## Orca MCPを使いたい
 
 apps/orca-mcp をビルドすると、stdio MCPとして起動できます。

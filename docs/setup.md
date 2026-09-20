@@ -121,6 +121,26 @@ Owner passwordによる認可、tool discovery、実際のtool callまで確認�
 
 詳細な理由は [DevSpaceの認証設計](devspace-auth.md) を参照してください。
 
+### ChatGPT側のTunnel resourceをDevSpaceへ許可する
+
+Secure MCP TunnelはProtected Resource Metadataの `resource` を、
+ChatGPTから見えるTunnel Service側のMCP URLへ書き換えます。
+DevSpaceはOAuth resourceを完全一致で検証するため、Connectorが実際に使うURLを
+`~/.devspace/config.jsonc` の `oauth.allowedResourceUrls` に追加します。
+
+URLは推測で組み立てません。
+ChatGPTのConnector作成時やOAuthエラーに表示されたMCP server URLなどから実値を確認します。
+
+~~~jsonc
+"allowedResourceUrls": [
+  "https://<ChatGPTが実際に使うTunnel MCP resource URL>"
+]
+~~~
+
+変更後はDevSpaceを再起動します。
+設定が不足している場合、OAuth認可時に
+`Invalid or missing OAuth resource` が返ることを実環境で確認しています。
+
 ## OAuth確認後にMCP本体をlocalhostへ戻す
 
 OAuthが通った後、Tunnel Clientが別origin OAuthを正式に扱える構成へ移します。

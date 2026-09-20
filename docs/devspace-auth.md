@@ -75,6 +75,17 @@ DevSpaceのshell toolはローカルユーザー権限で動くため、
 OpenAI Secure MCP Tunnelは、OAuth保護されたHTTP MCPをサポートしています。
 MCP通信のAuthorization headerをDevSpaceへ転送し、OAuth discoveryもローカル側で実行します。
 
+Protected Resource Metadataの `resource` は、ChatGPTから見えるTunnel Service側の
+MCP URLへ書き換えられます。
+DevSpaceはOAuthのresourceを完全一致で検証するため、その書き換え後URLを
+`oauth.allowedResourceUrls` に追加する必要があります。
+ここにはoriginやワイルドカードを入れず、ChatGPTが実際に使うMCP resource URLだけを許可します。
+
+2026-09-20の実環境では、`allowedResourceUrls` が空のままだと
+ChatGPTのOAuth認可が `Invalid or missing OAuth resource` で失敗しました。
+Tunnel Service側のresource URLを1件追加してDevSpaceを再起動した後は、
+同じOAuth clientとresourceで `/authorize` が200となり、Owner password入力画面まで到達することを確認しています。
+
 OAuthのうち、Tunnel側で中継できるものとできないものを分けます。
 
 | OAuth処理 | 経路 |
@@ -87,6 +98,23 @@ OAuthのうち、Tunnel側で中継できるものとできないものを分け
 | ブラウザのAuthorization endpoint | upstreamへ直接アクセス |
 
 最後のAuthorization endpointだけは、ブラウザから到達できる公開HTTPS URLが必要です。
+
+### Tunnel resource aliasは実値を確認して登録する
+
+Tunnel Service側のresource URLは、環境やサービス実装に依存するため、このリポジトリへ固定値を書きません。
+ChatGPTのConnectorが実際に使っているMCP server URLを確認し、その完全なURLを
+`~/.devspace/config.jsonc` の `oauth.allowedResourceUrls` へ登録します。
+
+~~~jsonc
+"oauth": {
+  "allowedResourceUrls": [
+    "https://<ChatGPTが実際に使うTunnel MCP resource URL>"
+  ]
+}
+~~~
+
+変更後はDevSpaceを再起動します。
+URLのhostだけを許可したり、別のTunnel URLを推測して追加したりしません。
 
 ## 現在のFunnel全体公開は移行中だけ
 
