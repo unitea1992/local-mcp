@@ -24,7 +24,8 @@ install -m 0644 "$source_unit" "$target_unit"
 tunnel-client runtimes stop orca-mcp --json >/dev/null 2>&1 || true
 
 systemctl --user daemon-reload
-systemctl --user enable --now local-mcp-orca-tunnel.service
+systemctl --user enable local-mcp-orca-tunnel.service >/dev/null
+systemctl --user restart local-mcp-orca-tunnel.service
 
 echo "Orca MCP Tunnel serviceを有効化しました。"
 systemctl --user --no-pager --full status local-mcp-orca-tunnel.service | sed -n '1,18p'

@@ -42,18 +42,17 @@ export ORCA_TUNNEL_ID='tunnel_...'
 export LOCAL_MCP_PROFILE_DIR="$HOME/.config/local-mcp/tunnel-profiles"
 LOCAL_MCP_ROOT="$(git rev-parse --show-toplevel)"
 
-tunnel-client runtimes connect \
-  --alias orca-mcp \
+tunnel-client init \
   --profile orca-mcp \
   --profile-dir "$LOCAL_MCP_PROFILE_DIR" \
   --tunnel-id "$ORCA_TUNNEL_ID" \
-  --runtime-api-key "file:$HOME/.config/local-mcp/runtime-api-key" \
+  --control-plane-api-key-ref "file:$HOME/.config/local-mcp/runtime-api-key" \
   --mcp-command "node $LOCAL_MCP_ROOT/apps/orca-mcp/dist/index.js" \
-  --json
+  --health-listen-addr 127.0.0.1:0
 ~~~
 
-ここではprofile生成と初回疎通を行います。
-接続できたら、次のsystemd化で `runtimes connect` のtmux runtimeから切り替えます。
+ここではprofileだけを生成します。
+常駐起動は次のsystemd serviceに任せるため、`runtimes connect` は使いません。
 
 ## Orca Tunnelをsystemdで常駐化する
 

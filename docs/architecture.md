@@ -61,7 +61,7 @@ Tunnelの作成・更新に必要なManage権限は常駐プロセスへ渡し�
 ## Orca Tunnelはsystemd user serviceで常駐する
 
 Orca Tunnelは `local-mcp-orca-tunnel.service` で管理します。
-`runtimes connect` が内部で作るtmux常駐runtimeは日常運用に使いません。
+profileは `tunnel-client init` で生成し、tmux常駐runtimeを作る `runtimes connect` は使いません。
 
 systemdからNVMを読み込んだ後に `tunnel-client run --profile orca-mcp` を起動します。
 これによりPC再起動後も自動復旧し、Node.jsの実行環境も普段のNVM設定へ揃えます。
