@@ -1,93 +1,74 @@
 # local-mcp
 
-ローカルMCPとSecure MCP Tunnelの設定・運用をまとめて管理するリポジトリです。
+ChatGPTからローカル開発環境へ接続する経路と、Orca向けMCPを管理するリポジトリです。
 
-最初の対象はDevSpaceとOrcaです。
-DevSpaceは汎用的なローカル操作、Orcaは普段の開発画面とOMP・OpenCodeの操作に使います。
-ChatGPTからローカル環境へ入る経路は、OpenAI Secure MCP Tunnelへ寄せます。
-DevSpaceだけはOAuthのブラウザ認可画面が必要なため、最終的にも認可画面だけ公開経路を残します。
+現在は役割ごとに接続方式を分けています。
+
+~~~text
+ChatGPT
+  │
+  ├─ DevSpace Local ─ Tailscale Funnel ─ DevSpace + OAuth
+  │
+  └─ Orca MCP ─ Secure MCP Tunnel ─ orca-mcp ─ Orca ─ OMP / OpenCode / Codex
+~~~
+
+DevSpaceはもともとのHTTP + OAuth構成をそのまま使います。
+Orca MCPは公開HTTPサーバーを持たず、OpenAI Secure MCP Tunnelからstdioで起動します。
 
 ## 最初はREADMEと設計だけ読めばよい
 
 初回はこのREADMEと [設計](docs/architecture.md) まで読めば十分です。
-日常運用で困ったときは [運用ガイド](docs/operations.md) を参照してください。
+セットアップをやり直すときは [セットアップ](docs/setup.md)、異常時は [運用ガイド](docs/operations.md) を参照します。
 
-~~~text
-ChatGPT
-   │
-   ├─ Secure MCP Tunnel ─ DevSpace
-   │
-   └─ Secure MCP Tunnel ─ orca-mcp ─ Orca ─ OMP / OpenCode
-~~~
+DevSpaceをSecure MCP Tunnelへ移す案も実機検証しましたが、OAuthのresource aliasやHarpoonを含む構成が増える割に、
+個人利用では既存のDevSpace OAuthに対する利点が小さいため採用しませんでした。
+判断経緯は [DevSpaceの接続方式](docs/devspace-auth.md) に残しています。
 
-Orca MCPはSecure MCP Tunnel経由で稼働しています。
-DevSpace MCPはOAuth連携を調整中です。
+## 役割を分ける
 
-現在のDevSpaceは移行中のため、Secure MCP Tunnelから既存Tailscale Funnelへ接続しています。
-これは最終構成ではありません。
-最終的にはMCP本体をlocalhostへ戻し、Funnelの公開範囲をOAuthの `/authorize` だけへ絞ります。
-詳しい判断理由は [DevSpaceの認証設計](docs/devspace-auth.md) にまとめています。
+| 経路 | 用途 | 認証・保護 |
+| --- | --- | --- |
+| DevSpace Local | ファイル、shell、Git、ローカルagent | DevSpace OAuth + Tailscale Funnel |
+| Orca MCP | Orca terminalとOMP / OpenCode / Codexの操作 | Secure MCP Tunnel + ChatGPT Workspace |
 
-## 役割ごとに置き場所を分ける
+`DevSpace Local` も通信方式はMCPです。
+名前の `Local` は「Secure MCP Tunnel版ではなく、既存のDevSpaceへ直接接続する経路」という識別用です。
 
-| パス | 役割 |
-| --- | --- |
-| apps/orca-mcp/ | ChatGPTからOrcaを操作する自作MCP |
-| profiles/ | Secure MCP Tunnelのプロファイル管理方針とローカル設定置き場 |
-| scripts/ | 状態確認や診断など、人間向けの運用コマンド |
-| docs/ | 設計、運用、移行手順 |
-
-## 日常運用は4コマンドに寄せる
+## 日常運用はスクリプトへ寄せる
 
 ~~~bash
-./scripts/install-tunnel-client.sh
 ./scripts/status.sh
 ./scripts/doctor.sh
 ./scripts/check.sh
 ~~~
 
-install-tunnel-client.sh はこのリポジトリで検証済みのOpenAI公式リリースをSHA256で確認し、
-tunnel-client本体だけを導入します。
-Cloudflare companionは今回使わないため導入しません。
-status.sh は依存ツールと現在の状態を確認します。
-doctor.sh は問題が起きたときの診断、check.sh はこのリポジトリ自身の型検査・テスト・Markdown検査をまとめて実行します。
+Orca Tunnelを初めて常駐化するときは次を使います。
 
-## Orca MCPは途中の開発セッションも引き継げる
+~~~bash
+./scripts/install-orca-tunnel-service.sh
+~~~
 
-普段からOMP / OpenCodeをフルアクセスで使う前提なので、既存terminalの出力も読めます。
-途中まで進めた案件をChatGPTからレビューし、そのまま軌道修正や部分的な引き継ぎができます。
+`tunnel-client` 自体の更新は `./scripts/install-tunnel-client.sh` で行います。
+OpenAI公式リリースのSHA256を検証し、このリポジトリで確認済みのバージョンを導入します。
 
-既存terminalへ入力するときだけ `orca_attach_terminal` を1回挟みます。
-これは権限制限ではなく、別のterminalへ誤送信しないためのガードです。
-attachできるのは、OrcaがOMP / OpenCode / Codexとして認識しているterminalです。
-引き継ぎを解除したい場合は `orca_detach_terminal` を使い、terminal自体は残します。
-既存terminalの終了はChatGPTから行わず、orca-mcp自身が起動したterminalだけ閉じられます。
+## Orca MCPは既存セッションをそのまま扱う
 
-- worktree一覧
-- terminal一覧・状態確認
-- 既存terminalを含む出力読み取り
-- 既存terminalの引き継ぎ
-- 既存terminalの引き継ぎ解除
-- 引き継いだterminalへの入力・待機
-- 新しいworktreeとOMP / OpenCode / Codexの起動
-- orca-mcpが起動したterminalの終了
+Orca MCPでは、既存terminalの一覧・状態・出力を読めます。
+途中まで進めたOMP / OpenCode / Codexの作業をChatGPTから確認し、必要なterminalだけ引き継げます。
 
-DevSpaceは本体を改造しません。
-Secure MCP Tunnelとの接続設定だけをこのリポジトリで管理します。
+既存terminalへ入力するときは `orca_attach_terminal` を1回挟みます。
+attachできるのはOrcaがagentとして認識しているterminalだけです。
+既存terminalはChatGPTから閉じず、orca-mcp自身が起動したterminalだけ終了できます。
 
-Secure MCP Tunnelの表示名は `Orca MCP` と `DevSpace MCP`、内部alias/profileは
-`orca-mcp` と `devspace-mcp` を使います。
+新しい作業は `orca_create_agent_worktree` でworktreeとagentをまとめて起動します。
+Orcaに設定したagent commandや既定引数を迂回しません。
 
 ## 秘密情報はGitに入れない
 
-API keyやTunnel IDなどの実値はコミットしません。
-.env.example は変数名だけを示す見本です。
-実値はローカルの環境変数か、tunnel-client が対応する秘密情報の参照方法で渡します。
-常駐runtimeにはTunnelsのRead + Useだけを持つRestricted keyを使い、Manage権限を持つ管理用keyは渡しません。
+Runtime API keyは `~/.config/local-mcp/runtime-api-key` に置き、Gitへ保存しません。
+常駐Orca TunnelにはTunnelsのRead + Useだけを持つRestricted keyを使います。
 
-## 問題が起きたらstatusから確認する
-
-まず ./scripts/status.sh、次に ./scripts/doctor.sh を実行します。
-それでも原因が分からない場合は、出力をChatGPTへ渡してこのリポジトリを確認します。
+実際のTunnel profileは `~/.config/local-mcp/tunnel-profiles/` に置きます。
+リポジトリには生成手順と運用方針だけを残します。
 
 最終更新: 2026-09-20

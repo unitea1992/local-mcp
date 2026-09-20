@@ -48,14 +48,27 @@ if command -v tunnel-client >/dev/null 2>&1; then
     echo "Secure MCP Tunnel: profile一覧を取得できません"
     failed=1
   elif [[ "$(printf "%s" "$profiles_json" | jq 'length')" -eq 0 ]]; then
-    echo "Secure MCP Tunnel: 未設定（まだ移行前なので正常です）"
+    echo "Secure MCP Tunnel: Orca profileがありません"
+    failed=1
   else
     count="$(printf "%s" "$profiles_json" | jq 'length')"
     echo "Secure MCP Tunnel: $count profile configured"
-    echo "詳細診断は対象profileを指定して tunnel-client doctor --profile-dir "$PROFILE_DIR" --profile <name> --explain を実行します。"
+    if tunnel-client doctor --profile-dir "$PROFILE_DIR" --profile orca-mcp >/dev/null 2>&1; then
+      echo "Orca MCP Tunnel profile: OK"
+    else
+      echo "Orca MCP Tunnel profile: NG"
+      failed=1
+    fi
   fi
 else
-  echo "tunnel-client: not installed (migration not started)"
+  echo "tunnel-client: not installed"
+  failed=1
+fi
+
+if systemctl --user is-active --quiet local-mcp-orca-tunnel.service 2>/dev/null; then
+  echo "Orca MCP Tunnel service: active"
+else
+  echo "Orca MCP Tunnel service: inactive"
   failed=1
 fi
 

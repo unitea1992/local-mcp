@@ -45,10 +45,12 @@ if command -v tunnel-client >/dev/null 2>&1; then
     echo "status unavailable"
   fi
   echo
-  echo "Managed runtimes:"
-  tunnel-client runtimes list --json 2>/dev/null \
-    | jq -r 'if (.aliases | length) == 0 then "  none" else .aliases[] | "  \(.alias // .name // .tunnel_id // "unknown")" end' \
-    2>/dev/null || echo "  status unavailable"
+  printf "Orca Tunnel service: "
+  if systemctl --user is-active --quiet local-mcp-orca-tunnel.service 2>/dev/null; then
+    echo "active"
+  else
+    echo "inactive"
+  fi
 fi
 
 echo

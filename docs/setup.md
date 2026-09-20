@@ -1,72 +1,45 @@
-# 初回セットアップはOrcaから始め、DevSpaceはOAuth確認後に切り替える
+# 初回セットアップはDevSpaceとOrcaを別々に考える
 
-この章は初回だけ上から順に進めます。
-普段の確認は [運用ガイド](operations.md) を使います。
+この章は初回セットアップや再構築時に使います。
+普段の確認は [運用ガイド](operations.md) を参照してください。
 
-現時点でローカル側のOrca MCPと tunnel-client の準備までは完了しています。
-OpenAI Platform側でTunnelとRestricted API keyを作る操作だけは、ユーザーのアカウントで行う必要があります。
+2026-09-20時点の確認済み構成は、DevSpace 1.1.0-beta.4、Orca 1.4.205、
+tunnel-client 0.0.14、Node.js 24.20.0、pnpm 11.25.0です。
 
-## ローカル環境が正常か確認する
+## DevSpaceは既存のFunnel + OAuthを使う
 
-~~~bash
-./scripts/status.sh
-./scripts/check.sh
-~~~
+DevSpaceは `127.0.0.1:7676` で起動し、`server.publicBaseUrl` にTailscale FunnelのHTTPS originを設定します。
+ChatGPT側では `DevSpace Local` として接続し、DevSpaceのOAuth認可を完了します。
 
-2026-09-20時点では、次の構成でローカルPoCを確認しています。
+DevSpace用のSecure MCP Tunnel profileやTunnel IDは作りません。
+過去に作成したDevSpace用Tunnelは [DevSpaceの接続方式](devspace-auth.md) の検証履歴として扱い、運用には使いません。
 
-| 項目 | 確認済みバージョン |
-| --- | --- |
-| tunnel-client | 0.0.14 |
-| Orca | 1.4.205 |
-| DevSpace | 1.1.0-beta.4 |
-| Node.js | 24.20.0 |
-| pnpm | 11.25.0 |
-| rumdl | 0.2.74 |
+## Orca用TunnelをOpenAI Platformで作る
 
-tunnel-client は、このリポジトリで動作確認したバージョンを固定して使います。
-新しいリリースへ更新するときは、OpenAI公式Docsとリリース内容を確認してから
-`config/tunnel-client.version` を更新し、`./scripts/install-tunnel-client.sh` を実行します。
+表示名は `Orca MCP`、ローカルのprofile名は `orca-mcp` にします。
+個人で使うChatGPT Workspaceへ関連付けます。
 
-## OpenAI PlatformでTunnelを2本作る
-
-Orca用とDevSpace用を分けます。
-片方の設定に問題が起きても、もう片方を復旧経路として残せるためです。
-
-表示名は `Orca MCP` と `DevSpace MCP` を推奨します。
-ローカルで使うaliasとprofileは `orca-mcp` と `devspace-mcp` に揃えます。
-それぞれ、利用するChatGPT WorkspaceまたはOrganizationへ関連付けます。
-作成後に表示されるTunnel IDはGitへ保存しません。
-
-## 常駐用のRestricted API keyを履歴に残さず保存する
-
-tunnel-client の常駐runtimeには、TunnelsのRead + Useだけを許可したRestricted keyを使います。
-Tunnelの作成・更新に必要なManage権限は付けません。
-
-Runtime API keyはシェル履歴やリポジトリへ残さず、権限を絞ったローカルファイルへ保存します。
+常駐runtime用のAPI keyはTunnelsのRead + Useだけを許可したRestricted keyにします。
+Manage権限は付けません。
 
 ~~~bash
 install -d -m 700 "$HOME/.config/local-mcp"
+
 read -rsp "Runtime API key: " LOCAL_MCP_RUNTIME_KEY
 printf '\n'
 printf '%s' "$LOCAL_MCP_RUNTIME_KEY" > "$HOME/.config/local-mcp/runtime-api-key"
 chmod 600 "$HOME/.config/local-mcp/runtime-api-key"
 unset LOCAL_MCP_RUNTIME_KEY
-
-export ORCA_TUNNEL_ID='tunnel_...'
-export DEVSPACE_TUNNEL_ID='tunnel_...'
-export LOCAL_MCP_PROFILE_DIR="$HOME/.config/local-mcp/tunnel-profiles"
 ~~~
 
-Tunnel IDは秘密情報ではありませんが、このリポジトリにはコミットしません。
-
-## Orca MCPを先に接続する
-
-Orca MCPはstdioなので、OAuthやHTTPサーバーの設定が不要です。
-先にこちらでSecure MCP Tunnelそのものの疎通を確認します。
+## Orca MCP profileを作る
 
 ~~~bash
+pnpm install
 pnpm build
+
+export ORCA_TUNNEL_ID='tunnel_...'
+export LOCAL_MCP_PROFILE_DIR="$HOME/.config/local-mcp/tunnel-profiles"
 LOCAL_MCP_ROOT="$(git rev-parse --show-toplevel)"
 
 tunnel-client runtimes connect \
@@ -77,99 +50,40 @@ tunnel-client runtimes connect \
   --runtime-api-key "file:$HOME/.config/local-mcp/runtime-api-key" \
   --mcp-command "node $LOCAL_MCP_ROOT/apps/orca-mcp/dist/index.js" \
   --json
-
-tunnel-client runtimes status orca-mcp --json
 ~~~
 
-ChatGPT側ではSecure MCP Tunnelを使う接続先として、Orca用Tunnel IDを選びます。
-接続後はworktree一覧とterminal一覧から確認します。
+ここではprofile生成と初回疎通を行います。
+接続できたら、次のsystemd化で `runtimes connect` のtmux runtimeから切り替えます。
 
-既存terminalの出力も読み取れます。
-途中案件を引き継ぐ場合は、対象terminalを確認してから `orca_attach_terminal` を実行すると、
-そのterminalへ追加指示を送れます。
-attach対象はOrcaがOMP / OpenCode / Codexとして認識しているterminalに限ります。
-既存terminalの終了だけはChatGPTから行いません。
-
-## DevSpaceはまず暫定経路でOAuthを確認する
-
-DevSpaceは `http://127.0.0.1:7676/mcp` で動作し、OAuthで保護されています。
-最終的にはこのlocalhost URLをSecure MCP Tunnelの上流にします。
-
-ただし2026-09-20時点の `tunnel-client 0.0.14` では、
-managed runtimeでlocalhost MCPと別originのOAuth serverを組み合わせる運用が安定しないため、
-現在は既存FunnelのMCP URLを暫定的に上流にしています。
+## Orca Tunnelをsystemdで常駐化する
 
 ~~~bash
-tunnel-client runtimes connect \
-  --alias devspace-mcp \
-  --profile devspace-mcp \
-  --profile-dir "$LOCAL_MCP_PROFILE_DIR" \
-  --tunnel-id "$DEVSPACE_TUNNEL_ID" \
-  --runtime-api-key "file:$HOME/.config/local-mcp/runtime-api-key" \
-  --mcp-server-url https://<現在のDevSpace-Funnel-origin>/mcp \
-  --json
-
-tunnel-client runtimes status devspace-mcp --json
-tunnel-client doctor \
-  --profile-dir "$LOCAL_MCP_PROFILE_DIR" \
-  --profile devspace-mcp \
-  --explain
+./scripts/install-orca-tunnel-service.sh
 ~~~
 
-この状態でChatGPTのDevSpace MCP ConnectorをOAuthとして追加し、
-Owner passwordによる認可、tool discovery、実際のtool callまで確認します。
+このスクリプトは旧tmux runtimeを停止し、
+`~/.config/systemd/user/local-mcp-orca-tunnel.service` をインストールして有効化します。
 
-詳細な理由は [DevSpaceの認証設計](devspace-auth.md) を参照してください。
+確認は次で行います。
 
-### ChatGPT側のTunnel resourceをDevSpaceへ許可する
-
-Secure MCP TunnelはProtected Resource Metadataの `resource` を、
-ChatGPTから見えるTunnel Service側のMCP URLへ書き換えます。
-DevSpaceはOAuth resourceを完全一致で検証するため、Connectorが実際に使うURLを
-`~/.devspace/config.jsonc` の `oauth.allowedResourceUrls` に追加します。
-
-URLは推測で組み立てません。
-ChatGPTのConnector作成時やOAuthエラーに表示されたMCP server URLなどから実値を確認します。
-
-~~~jsonc
-"allowedResourceUrls": [
-  "https://<ChatGPTが実際に使うTunnel MCP resource URL>"
-]
+~~~bash
+systemctl --user status local-mcp-orca-tunnel.service
+./scripts/status.sh
+./scripts/doctor.sh
 ~~~
 
-変更後はDevSpaceを再起動します。
-設定が不足している場合、OAuth認可時に
-`Invalid or missing OAuth resource` が返ることを実環境で確認しています。
+ChatGPT側では `Orca MCP` Connectorからworktree一覧を取得できれば完了です。
 
-## OAuth確認後にMCP本体をlocalhostへ戻す
-
-OAuthが通った後、Tunnel Clientが別origin OAuthを正式に扱える構成へ移します。
-その段階で `devspace-mcp` の上流を次へ変更します。
-
-~~~text
-http://127.0.0.1:7676/mcp
-~~~
-
-その後、Tailscale FunnelはDevSpace全体ではなく認可専用proxyへ向けます。
-公開するのは `GET /authorize` と `POST /authorize` だけです。
-
-切り替え前後の確認項目は [DevSpaceの認証設計](devspace-auth.md) にまとめています。
-
-Funnelを完全停止することは現行OAuth仕様では目標にしません。
-ブラウザのAuthorization endpointだけは公開HTTPS URLが必要です。
-
-## 問題が起きたら秘密値を出さずに診断する
+## 秘密値を出さずに診断する
 
 ~~~bash
 ./scripts/status.sh
 ./scripts/doctor.sh
-tunnel-client runtimes status orca-mcp --json
-tunnel-client runtimes status devspace-mcp --json
-tunnel-client doctor --profile-dir "$HOME/.config/local-mcp/tunnel-profiles" --profile devspace-mcp --explain
+journalctl --user -u local-mcp-orca-tunnel.service -n 100 --no-pager
 ~~~
 
-API key、OAuth token、パスワードはChatGPTへ貼り付けません。
-診断結果だけで判断できない場合は、秘密値を伏せた設定とログを確認します。
+API key、OAuth token、Owner passwordはChatGPTへ貼り付けません。
+設定確認が必要な場合も秘密値そのものではなく、権限・パス・HTTP statusを確認します。
 
 ## 参考にする正本
 

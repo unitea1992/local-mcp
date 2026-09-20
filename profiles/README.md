@@ -1,21 +1,19 @@
-# Secure MCP Tunnelの実プロファイルはホーム配下だけに置く
+# Secure MCP Tunnelの実profileはOrca用だけ持つ
 
-実際に使うprofileは `~/.config/local-mcp/tunnel-profiles/` に置きます。
+実際に使うprofileは `~/.config/local-mcp/tunnel-profiles/orca-mcp.yaml` です。
 リポジトリの外なのでGit管理されません。
-API keyはprofileへ直書きせず、`~/.config/local-mcp/runtime-api-key` を
-`file:` 参照します。
 
-プロファイルは現在インストールされている tunnel-client から生成します。
-設定形式をこのリポジトリで独自に複製しないことで、公式クライアントの更新へ追従しやすくします。
+Runtime API keyはprofileへ直書きせず、
+`~/.config/local-mcp/runtime-api-key` を `file:` 参照します。
+
+profileは現在インストールされている `tunnel-client` から生成します。
 
 ~~~bash
 tunnel-client profiles samples list
 tunnel-client help quickstart
 ~~~
 
-DevSpaceとOrcaには別々のTunnel IDを割り当てる方針です。
-表示名は `DevSpace MCP` / `Orca MCP`、runtime aliasとprofileは
-`devspace-mcp` / `orca-mcp` に揃えます。
-stdio MCPは同じTunnel IDで複数の tunnel-client を同時起動しません。
+表示名は `Orca MCP`、profile名は `orca-mcp` に揃えます。
+日常の常駐管理は `local-mcp-orca-tunnel.service` が担当します。
 
-DevSpaceのOAuth構成は [DevSpaceの認証設計](../docs/devspace-auth.md) を正本にします。
+DevSpaceはSecure MCP Tunnelを使わないため、`devspace-mcp` profileは持ちません。
