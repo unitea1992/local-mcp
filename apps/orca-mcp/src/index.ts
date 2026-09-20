@@ -11,12 +11,156 @@ const ATTACHABLE_AGENT_IDENTITIES = new Set([
   "codex",
 ]);
 
+const nullableString = z.string().nullable().optional();
+
+const worktreeSchema = z.object({
+  id: z.string().optional(),
+  repoId: z.string().optional(),
+  path: z.string().optional(),
+  branch: nullableString,
+  displayName: z.string().optional(),
+  isMainWorktree: z.boolean().optional(),
+  workspaceStatus: z.string().optional(),
+  isArchived: z.boolean().optional(),
+  parentWorktreeId: nullableString,
+});
+
+const terminalSchema = z.object({
+  handle: z.string().optional(),
+  worktreeId: z.string().optional(),
+  worktreePath: z.string().optional(),
+  branch: nullableString,
+  title: nullableString,
+  connected: z.boolean().optional(),
+  writable: z.boolean().optional(),
+  orphaned: z.boolean().optional(),
+  lastOutputAt: nullableString,
+  executionHostId: nullableString,
+  agentIdentity: nullableString,
+});
+
+const worktreeListOutputSchema = z.object({
+  ok: z.boolean().optional(),
+  result: z.object({
+    worktrees: z.array(worktreeSchema),
+  }),
+});
+
+const terminalListOutputSchema = z.object({
+  ok: z.boolean().optional(),
+  result: z.object({
+    terminals: z.array(terminalSchema),
+  }),
+});
+
+const terminalOutputSchema = z.object({
+  ok: z.boolean().optional(),
+  result: z.object({
+    terminal: terminalSchema,
+  }),
+});
+
+const terminalReadOutputSchema = z.object({
+  ok: z.boolean().optional(),
+  result: z.object({
+    terminal: z.object({
+      handle: z.string(),
+      status: z.string(),
+      source: z
+        .enum(["stream", "screen", "screen-unavailable"])
+        .optional(),
+      draft: z.string().optional(),
+      tail: z.array(z.string()),
+      nextCursor: z.string().nullable(),
+      oldestCursor: z.string().optional(),
+      latestCursor: z.string().optional(),
+      truncated: z.boolean().optional(),
+      limited: z.boolean().optional(),
+      returnedLineCount: z.number().int().nonnegative().optional(),
+    }),
+  }),
+});
+
+const promptReceiptSchema = z.object({
+  requestId: z.string(),
+  stages: z.array(z.string()),
+  provider: z.string(),
+  observation: z.string(),
+  processIncarnation: z.string().optional(),
+  generation: z.number().int().optional(),
+  baselineWorkingSequence: z.number().int().optional(),
+});
+
+const terminalSendOutputSchema = z.object({
+  ok: z.boolean().optional(),
+  result: z.object({
+    send: z.object({
+      handle: z.string(),
+      accepted: z.boolean(),
+      bytesWritten: z.number().int().nonnegative().optional(),
+      refusedReason: z.string().optional(),
+      prompt: promptReceiptSchema.optional(),
+    }),
+    warnings: z.array(z.string()).optional(),
+  }),
+});
+
+const terminalWaitOutputSchema = z.object({
+  ok: z.boolean().optional(),
+  result: z.object({
+    wait: z.object({
+      handle: z.string(),
+      condition: z.string(),
+      satisfied: z.boolean(),
+      status: z.string(),
+      exitCode: z.number().int().nullable().optional(),
+      blockedReason: z.string().optional(),
+    }),
+  }),
+});
+
+const createdWorktreeOutputSchema = z.object({
+  ok: z.boolean().optional(),
+  result: z.object({
+    worktree: worktreeSchema,
+    agent: z.object({
+      identity: z.enum(["omp", "opencode", "codex"]),
+      terminal: z.string(),
+    }),
+    recovered: z.boolean(),
+  }),
+});
+
+const terminalCloseOutputSchema = z.object({
+  ok: z.boolean().optional(),
+  result: z.object({
+    close: z.object({
+      handle: z.string(),
+      closeMode: z.string().optional(),
+      tabId: z.string().optional(),
+      ptyKilled: z.boolean().optional(),
+      ptyStopVerdict: z.string().optional(),
+      ptyStopReason: z.string().optional(),
+    }),
+  }),
+});
+
+const detachOutputSchema = z.object({
+  terminal: z.string(),
+  writable: z.boolean(),
+});
+
 function result(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("MCP tool result must be a JSON object.");
+  }
+  const structuredContent = value as Record<string, unknown>;
   return {
+    structuredContent,
     content: [
       {
         type: "text" as const,
-        text: JSON.stringify(value, null, 2),
+        text: JSON.stringify(structuredContent, null, 2),
       },
     ],
   };
@@ -237,6 +381,146 @@ function sanitizeCreatedWorktreeResponse(
   };
 }
 
+function sanitizeTerminalReadResponse(value: unknown): unknown {
+  if (!value || typeof value !== "object") {
+    throw new Error("Orca terminal read response is not an object.");
+  }
+  const source = value as {
+    ok?: unknown;
+    result?: {
+      terminal?: Record<string, unknown>;
+    };
+  };
+  const terminal = source.result?.terminal;
+  if (!terminal || typeof terminal !== "object") {
+    throw new Error("Orca terminal read response is missing terminal data.");
+  }
+  return {
+    ok: source.ok,
+    result: {
+      terminal: {
+        handle: terminal.handle,
+        status: terminal.status,
+        source: terminal.source,
+        draft: terminal.draft,
+        tail: terminal.tail,
+        nextCursor: terminal.nextCursor,
+        oldestCursor: terminal.oldestCursor,
+        latestCursor: terminal.latestCursor,
+        truncated: terminal.truncated,
+        limited: terminal.limited,
+        returnedLineCount: terminal.returnedLineCount,
+      },
+    },
+  };
+}
+
+function sanitizeTerminalSendResponse(value: unknown): unknown {
+  if (!value || typeof value !== "object") {
+    throw new Error("Orca terminal send response is not an object.");
+  }
+  const source = value as {
+    ok?: unknown;
+    result?: {
+      send?: Record<string, unknown>;
+      warnings?: unknown;
+    };
+  };
+  const send = source.result?.send;
+  if (!send || typeof send !== "object") {
+    throw new Error("Orca terminal send response is missing send data.");
+  }
+  const prompt =
+    send.prompt && typeof send.prompt === "object"
+      ? (send.prompt as Record<string, unknown>)
+      : undefined;
+  return {
+    ok: source.ok,
+    result: {
+      send: {
+        handle: send.handle,
+        accepted: send.accepted,
+        bytesWritten: send.bytesWritten,
+        refusedReason: send.refusedReason,
+        prompt: prompt
+          ? {
+              requestId: prompt.requestId,
+              stages: prompt.stages,
+              provider: prompt.provider,
+              observation: prompt.observation,
+              processIncarnation: prompt.processIncarnation,
+              generation: prompt.generation,
+              baselineWorkingSequence: prompt.baselineWorkingSequence,
+            }
+          : undefined,
+      },
+      warnings: Array.isArray(source.result?.warnings)
+        ? source.result.warnings.filter(
+            (warning): warning is string => typeof warning === "string",
+          )
+        : undefined,
+    },
+  };
+}
+
+function sanitizeTerminalWaitResponse(value: unknown): unknown {
+  if (!value || typeof value !== "object") {
+    throw new Error("Orca terminal wait response is not an object.");
+  }
+  const source = value as {
+    ok?: unknown;
+    result?: {
+      wait?: Record<string, unknown>;
+    };
+  };
+  const wait = source.result?.wait;
+  if (!wait || typeof wait !== "object") {
+    throw new Error("Orca terminal wait response is missing wait data.");
+  }
+  return {
+    ok: source.ok,
+    result: {
+      wait: {
+        handle: wait.handle,
+        condition: wait.condition,
+        satisfied: wait.satisfied,
+        status: wait.status,
+        exitCode: wait.exitCode,
+        blockedReason: wait.blockedReason,
+      },
+    },
+  };
+}
+
+function sanitizeTerminalCloseResponse(value: unknown): unknown {
+  if (!value || typeof value !== "object") {
+    throw new Error("Orca terminal close response is not an object.");
+  }
+  const source = value as {
+    ok?: unknown;
+    result?: {
+      close?: Record<string, unknown>;
+    };
+  };
+  const close = source.result?.close;
+  if (!close || typeof close !== "object") {
+    throw new Error("Orca terminal close response is missing close data.");
+  }
+  return {
+    ok: source.ok,
+    result: {
+      close: {
+        handle: close.handle,
+        closeMode: close.closeMode,
+        tabId: close.tabId,
+        ptyKilled: close.ptyKilled,
+        ptyStopVerdict: close.ptyStopVerdict,
+        ptyStopReason: close.ptyStopReason,
+      },
+    },
+  };
+}
+
 function createServer(): McpServer {
   const server = new McpServer({
     name: "orca-mcp",
@@ -405,10 +689,13 @@ function createServer(): McpServer {
   server.registerTool(
     "orca_list_worktrees",
     {
+      title: "Orca worktree一覧",
       description: "Orcaが管理しているworktree一覧を取得します。",
+      outputSchema: worktreeListOutputSchema,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
+        openWorldHint: false,
         idempotentHint: true,
       },
     },
@@ -423,13 +710,16 @@ function createServer(): McpServer {
   server.registerTool(
   "orca_list_terminals",
   {
+    title: "Orca terminal一覧",
     description: "指定したOrca worktreeのterminal一覧を取得します。",
     inputSchema: z.object({
       worktree: z.string().min(1).describe("Orca worktree selector"),
     }),
+    outputSchema: terminalListOutputSchema,
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
+      openWorldHint: false,
       idempotentHint: true,
     },
   },
@@ -450,13 +740,16 @@ function createServer(): McpServer {
   server.registerTool(
   "orca_show_terminal",
   {
+    title: "Orca terminal状態",
     description: "Orca terminalの現在状態を取得します。",
     inputSchema: z.object({
       terminal: z.string().min(1).describe("Orca terminal handle"),
     }),
+    outputSchema: terminalOutputSchema,
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
+      openWorldHint: false,
       idempotentHint: true,
     },
   },
@@ -471,6 +764,7 @@ function createServer(): McpServer {
   server.registerTool(
   "orca_read_terminal",
   {
+    title: "Orca terminal出力を読む",
     description:
       "Orca terminalの出力を読み取ります。既存のOMP/OpenCodeやshellもレビュー対象として読めます。",
     inputSchema: z.object({
@@ -478,9 +772,11 @@ function createServer(): McpServer {
       cursor: z.string().min(1).optional(),
       limit: z.number().int().min(1).max(5000).optional(),
     }),
+    outputSchema: terminalReadOutputSchema,
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
+      openWorldHint: false,
       idempotentHint: true,
     },
   },
@@ -493,21 +789,24 @@ function createServer(): McpServer {
       args.push("--limit", String(limit));
     }
     args.push("--json");
-    return result(await runOrca(args));
+    return result(sanitizeTerminalReadResponse(await runOrca(args)));
   },
   );
 
   server.registerTool(
   "orca_attach_terminal",
   {
+    title: "Orca agent terminalを引き継ぐ",
     description:
       "OrcaがOMP/OpenCode/Codexと認識している既存terminalを引き継ぎ、ChatGPTから追加指示を送れるようにします。送信前にorca_read_terminalで内容を確認してください。",
     inputSchema: z.object({
       terminal: z.string().min(1).describe("Orca terminal handle"),
     }),
+    outputSchema: terminalOutputSchema,
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
+      openWorldHint: false,
       idempotentHint: true,
     },
   },
@@ -533,14 +832,17 @@ function createServer(): McpServer {
   server.registerTool(
   "orca_detach_terminal",
   {
+    title: "Orca agent terminalの引き継ぎを解除",
     description:
       "既存terminalの引き継ぎを解除します。terminal自体は終了せず、以後の入力だけを拒否します。",
     inputSchema: z.object({
       terminal: z.string().min(1).describe("Orca terminal handle"),
     }),
+    outputSchema: detachOutputSchema,
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
+      openWorldHint: false,
       idempotentHint: true,
     },
   },
@@ -558,6 +860,7 @@ function createServer(): McpServer {
   server.registerTool(
   "orca_send_terminal",
   {
+    title: "Orca agent terminalへ指示を送る",
     description:
       "orca-mcpが起動したterminal、またはorca_attach_terminalで引き継いだ既存terminalへ追加指示を送ります。",
     inputSchema: z.object({
@@ -566,9 +869,11 @@ function createServer(): McpServer {
       enter: z.boolean().default(true),
       waitSubmitSeconds: z.number().int().min(1).max(60).optional(),
     }),
+    outputSchema: terminalSendOutputSchema,
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
+      openWorldHint: false,
       idempotentHint: false,
     },
   },
@@ -591,7 +896,9 @@ function createServer(): McpServer {
         args.push("--wait-submit", String(waitSubmitSeconds));
       }
       args.push("--json");
-      return result(await runOrca(args, 90_000));
+      return result(
+        sanitizeTerminalSendResponse(await runOrca(args, 90_000)),
+      );
     });
   },
   );
@@ -599,6 +906,7 @@ function createServer(): McpServer {
   server.registerTool(
   "orca_wait_terminal",
   {
+    title: "Orca terminalを待機",
     description:
       "Orca terminalが終了するか、TUIエージェントが入力待ちになるまで待機します。",
     inputSchema: z.object({
@@ -606,28 +914,32 @@ function createServer(): McpServer {
       state: z.enum(["exit", "tui-idle"]),
       timeoutMs: z.number().int().min(1_000).max(300_000).default(60_000),
     }),
+    outputSchema: terminalWaitOutputSchema,
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
+      openWorldHint: false,
       idempotentHint: true,
     },
   },
   async ({ terminal, state, timeoutMs }) => {
     return result(
-      await runOrca(
-        [
-          "terminal",
+      sanitizeTerminalWaitResponse(
+        await runOrca(
+          [
+            "terminal",
+            "wait",
+            "--terminal",
+            terminal,
+            "--for",
+            state,
+            "--timeout-ms",
+            String(timeoutMs),
+            "--json",
+          ],
+          timeoutMs + 5_000,
           "wait",
-          "--terminal",
-          terminal,
-          "--for",
-          state,
-          "--timeout-ms",
-          String(timeoutMs),
-          "--json",
-        ],
-        timeoutMs + 5_000,
-        "wait",
+        ),
       ),
     );
   },
@@ -636,6 +948,7 @@ function createServer(): McpServer {
   server.registerTool(
   "orca_create_agent_worktree",
   {
+    title: "Orca agent worktreeを作成",
     description:
       "Orcaのagent-aware launcherを使い、新しいworktreeとOMP/OpenCode/Codexをまとめて起動します。",
     inputSchema: z.object({
@@ -655,9 +968,11 @@ function createServer(): McpServer {
         .describe("明示的にGit baseを変える場合だけ指定")
         .optional(),
     }),
+    outputSchema: createdWorktreeOutputSchema,
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
+      openWorldHint: false,
       idempotentHint: false,
     },
   },
@@ -745,13 +1060,16 @@ function createServer(): McpServer {
   server.registerTool(
   "orca_close_terminal",
   {
+    title: "Orca MCP作成terminalを閉じる",
     description: "orca-mcpが起動したOMP/OpenCode/Codexのterminalだけを終了して閉じます。",
     inputSchema: z.object({
       terminal: z.string().min(1).describe("Orca terminal handle"),
     }),
+    outputSchema: terminalCloseOutputSchema,
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
+      openWorldHint: false,
       idempotentHint: false,
     },
   },
@@ -759,13 +1077,15 @@ function createServer(): McpServer {
     assertSpawnedTerminal(terminal);
     return withTerminalWriteLock(terminal, async () => {
       assertSpawnedTerminal(terminal);
-      const response = await runOrca([
-        "terminal",
-        "close",
-        "--terminal",
-        terminal,
-        "--json",
-      ]);
+      const response = sanitizeTerminalCloseResponse(
+        await runOrca([
+          "terminal",
+          "close",
+          "--terminal",
+          terminal,
+          "--json",
+        ]),
+      );
       spawnedAgentTerminals.delete(terminal);
       writableAgentTerminals.delete(terminal);
       return result(response);
@@ -781,4 +1101,3 @@ process.on("SIGINT", () => {
   void handle.close();
 });
 console.error("orca-mcp is listening on stdio");
-

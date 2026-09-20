@@ -42,6 +42,24 @@ async function createFakeOrca(): Promise<{
     "  payload = { ok: true, result: { worktrees } };",
     "} else if (key === 'terminal list') {",
     "  payload = { ok: true, result: { terminals: [{ handle: 'term_recovered', worktreeId: 'repo::/tmp/recover-task', worktreePath: '/tmp/recover-task', branch: 'refs/heads/recover-task', title: 'OpenCode', connected: true, writable: true, agentIdentity: 'opencode' }] } };",
+    "} else if (key === 'terminal read') {",
+    "  const index = args.indexOf('--terminal');",
+    "  const handle = index >= 0 ? args[index + 1] : 'term_unknown';",
+    "  payload = { ok: true, result: { terminal: { handle, status: 'running', source: 'stream', tail: ['output'], nextCursor: '1', oldestCursor: '0', latestCursor: '1', truncated: false, limited: false, returnedLineCount: 1, internal: 'must-not-leak' } } };",
+    "} else if (key === 'terminal send') {",
+    "  const index = args.indexOf('--terminal');",
+    "  const handle = index >= 0 ? args[index + 1] : 'term_unknown';",
+    "  payload = { ok: true, result: { send: { handle, accepted: true, bytesWritten: 8, prompt: { requestId: 'req-1', stages: ['input_accepted', 'turn_started'], provider: 'opencode', observation: 'turn_started', processIncarnation: 'proc-1', generation: 1, baselineWorkingSequence: 0 }, internal: 'must-not-leak' } } };",
+    "} else if (key === 'terminal wait') {",
+    "  const index = args.indexOf('--terminal');",
+    "  const handle = index >= 0 ? args[index + 1] : 'term_unknown';",
+    "  const conditionIndex = args.indexOf('--for');",
+    "  const condition = conditionIndex >= 0 ? args[conditionIndex + 1] : 'tui-idle';",
+    "  payload = { ok: true, result: { wait: { handle, condition, satisfied: true, status: 'running', exitCode: null, internal: 'must-not-leak' } } };",
+    "} else if (key === 'terminal close') {",
+    "  const index = args.indexOf('--terminal');",
+    "  const handle = index >= 0 ? args[index + 1] : 'term_unknown';",
+    "  payload = { ok: true, result: { close: { handle, closeMode: 'terminal', ptyKilled: true, internal: 'must-not-leak' } } };",
     "} else if (key === 'worktree create') {",
     "  const nameIndex = args.indexOf('--name');",
     "  const name = nameIndex >= 0 ? args[nameIndex + 1] : '';",
@@ -113,11 +131,99 @@ test("stdioで起動し、既存agentの引き継ぎと新規agent起動を扱�
     assert.equal(sendTool?.annotations?.readOnlyHint, false);
     assert.equal(sendTool?.annotations?.destructiveHint, true);
 
+    assert.equal(response.tools.length, 10);
+    const expectedAnnotations = {
+      orca_attach_terminal: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: false,
+        idempotentHint: true,
+      },
+      orca_close_terminal: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        openWorldHint: false,
+        idempotentHint: false,
+      },
+      orca_create_agent_worktree: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: false,
+        idempotentHint: false,
+      },
+      orca_detach_terminal: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: false,
+        idempotentHint: true,
+      },
+      orca_list_terminals: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+        idempotentHint: true,
+      },
+      orca_list_worktrees: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+        idempotentHint: true,
+      },
+      orca_read_terminal: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+        idempotentHint: true,
+      },
+      orca_send_terminal: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        openWorldHint: false,
+        idempotentHint: false,
+      },
+      orca_show_terminal: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+        idempotentHint: true,
+      },
+      orca_wait_terminal: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+        idempotentHint: true,
+      },
+    } as const;
+    for (const tool of response.tools) {
+      assert.ok(tool.title);
+      assert.ok(tool.outputSchema);
+      assert.equal(
+        (tool.outputSchema as { type?: string }).type,
+        "object",
+      );
+      assert.equal(tool.annotations?.openWorldHint, false);
+      assert.deepEqual(
+        tool.annotations,
+        expectedAnnotations[tool.name as keyof typeof expectedAnnotations],
+      );
+    }
+
     const listTool = response.tools.find(
       (tool) => tool.name === "orca_list_worktrees",
     );
     assert.equal(listTool?.annotations?.readOnlyHint, true);
     assert.equal(listTool?.annotations?.destructiveHint, false);
+
+    const listed = await client.callTool({
+      name: "orca_list_worktrees",
+      arguments: {},
+    });
+    assert.notEqual(listed.isError, true);
+    assert.deepEqual(listed.structuredContent, {
+      ok: true,
+      result: { worktrees: [] },
+    });
+    assert.deepEqual(JSON.parse((listed.content?.[0] as { text: string }).text), listed.structuredContent);
 
     const blocked = await client.callTool({
       name: "orca_send_terminal",
@@ -135,6 +241,51 @@ test("stdioで起動し、既存agentの引き継ぎと新規agent起動を扱�
       },
     });
     assert.notEqual(readable.isError, true);
+    assert.deepEqual(readable.structuredContent, {
+      ok: true,
+      result: {
+        terminal: {
+          handle: "term_not_managed",
+          status: "running",
+          source: "stream",
+          tail: ["output"],
+          nextCursor: "1",
+          oldestCursor: "0",
+          latestCursor: "1",
+          truncated: false,
+          limited: false,
+          returnedLineCount: 1,
+        },
+      },
+    });
+    assert.deepEqual(JSON.parse((readable.content?.[0] as { text: string }).text), readable.structuredContent);
+    assert.equal(
+      JSON.stringify(readable.structuredContent).includes("must-not-leak"),
+      false,
+    );
+
+    const waited = await client.callTool({
+      name: "orca_wait_terminal",
+      arguments: {
+        terminal: "term_not_managed",
+        state: "tui-idle",
+        timeoutMs: 1_000,
+      },
+    });
+    assert.notEqual(waited.isError, true);
+    assert.deepEqual(waited.structuredContent, {
+      ok: true,
+      result: {
+        wait: {
+          handle: "term_not_managed",
+          condition: "tui-idle",
+          satisfied: true,
+          status: "running",
+          exitCode: null,
+        },
+      },
+    });
+    assert.deepEqual(JSON.parse((waited.content?.[0] as { text: string }).text), waited.structuredContent);
 
     const shellAttach = await client.callTool({
       name: "orca_attach_terminal",
@@ -160,6 +311,26 @@ test("stdioで起動し、既存agentの引き継ぎと新規agent起動を扱�
       },
     });
     assert.notEqual(sendAfterAttach.isError, true);
+    assert.deepEqual(sendAfterAttach.structuredContent, {
+      ok: true,
+      result: {
+        send: {
+          handle: "term_existing_agent",
+          accepted: true,
+          bytesWritten: 8,
+          prompt: {
+            requestId: "req-1",
+            stages: ["input_accepted", "turn_started"],
+            provider: "opencode",
+            observation: "turn_started",
+            processIncarnation: "proc-1",
+            generation: 1,
+            baselineWorkingSequence: 0,
+          },
+        },
+      },
+    });
+    assert.deepEqual(JSON.parse((sendAfterAttach.content?.[0] as { text: string }).text), sendAfterAttach.structuredContent);
 
     const detached = await client.callTool({
       name: "orca_detach_terminal",
@@ -168,6 +339,10 @@ test("stdioで起動し、既存agentの引き継ぎと新規agent起動を扱�
       },
     });
     assert.notEqual(detached.isError, true);
+    assert.deepEqual(detached.structuredContent, {
+      terminal: "term_existing_agent",
+      writable: false,
+    });
 
     const blockedAfterDetach = await client.callTool({
       name: "orca_send_terminal",
@@ -196,6 +371,16 @@ test("stdioで起動し、既存agentの引き継ぎと新規agent起動を扱�
       },
     });
     assert.notEqual(closeSpawned.isError, true);
+    assert.deepEqual(closeSpawned.structuredContent, {
+      ok: true,
+      result: {
+        close: {
+          handle: "term_spawned",
+          closeMode: "terminal",
+          ptyKilled: true,
+        },
+      },
+    });
 
     const recovered = await client.callTool({
       name: "orca_create_agent_worktree",
@@ -207,6 +392,22 @@ test("stdioで起動し、既存agentの引き継ぎと新規agent起動を扱�
       },
     });
     assert.notEqual(recovered.isError, true);
+    assert.deepEqual(recovered.structuredContent, {
+      ok: true,
+      result: {
+        worktree: {
+          id: "repo::/tmp/recover-task",
+          repoId: "repo",
+          path: "/tmp/recover-task",
+          branch: "refs/heads/recover-task",
+          displayName: "recover-task",
+          workspaceStatus: "in-progress",
+          parentWorktreeId: null,
+        },
+        agent: { identity: "opencode", terminal: "term_recovered" },
+        recovered: true,
+      },
+    });
 
     const closeRecovered = await client.callTool({
       name: "orca_close_terminal",
