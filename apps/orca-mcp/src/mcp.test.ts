@@ -45,7 +45,8 @@ async function createFakeOrca(): Promise<{
     "} else if (key === 'terminal read') {",
     "  const index = args.indexOf('--terminal');",
     "  const handle = index >= 0 ? args[index + 1] : 'term_unknown';",
-    "  payload = { ok: true, result: { terminal: { handle, status: 'running', source: 'stream', tail: ['output'], nextCursor: '1', oldestCursor: '0', latestCursor: '1', truncated: false, limited: false, returnedLineCount: 1, internal: 'must-not-leak' } } };",
+    "  const screen = args.includes('--screen');",
+    "  payload = { ok: true, result: { terminal: { handle, status: 'running', source: screen ? 'screen' : 'stream', draft: screen ? 'draft-text' : undefined, tail: [screen ? 'rendered-output' : 'output'], nextCursor: screen ? null : '1', oldestCursor: screen ? undefined : '0', latestCursor: screen ? undefined : '1', truncated: false, limited: false, returnedLineCount: 1, internal: 'must-not-leak' } } };",
     "} else if (key === 'terminal send') {",
     "  const index = args.indexOf('--terminal');",
     "  const handle = index >= 0 ? args[index + 1] : 'term_unknown';",
@@ -287,6 +288,41 @@ test("stdioで起動し、既存agentの引き継ぎと新規agent起動を扱�
       JSON.stringify(readable.structuredContent).includes("must-not-leak"),
       false,
     );
+
+    const rendered = await client.callTool({
+      name: "orca_read_terminal",
+      arguments: {
+        terminal: "term_not_managed",
+        screen: true,
+      },
+    });
+    assert.notEqual(rendered.isError, true);
+    assert.deepEqual(rendered.structuredContent, {
+      ok: true,
+      result: {
+        terminal: {
+          handle: "term_not_managed",
+          status: "running",
+          source: "screen",
+          draft: "draft-text",
+          tail: ["rendered-output"],
+          nextCursor: null,
+          truncated: false,
+          limited: false,
+          returnedLineCount: 1,
+        },
+      },
+    });
+
+    const invalidScreenCursor = await client.callTool({
+      name: "orca_read_terminal",
+      arguments: {
+        terminal: "term_not_managed",
+        screen: true,
+        cursor: "1",
+      },
+    });
+    assert.equal(invalidScreenCursor.isError, true);
 
     const waited = await client.callTool({
       name: "orca_wait_terminal",

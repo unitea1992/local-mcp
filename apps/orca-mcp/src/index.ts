@@ -770,11 +770,15 @@ function createServer(): McpServer {
   {
     title: "Orca terminal出力を読む",
     description:
-      "Orca terminalの出力を読み取ります。既存のOMP/OpenCodeやshellもレビュー対象として読めます。",
+      "Orca terminalの出力を読み取ります。OMP/OpenCodeなどのTUI表示を確認する場合はscreen=trueを使います。",
     inputSchema: z.object({
       terminal: z.string().min(1).describe("Orca terminal handle"),
       cursor: z.string().min(1).optional(),
       limit: z.number().int().min(1).max(5000).optional(),
+      screen: z
+        .boolean()
+        .default(false)
+        .describe("現在の描画画面を読む。cursorとは同時指定できません。"),
     }),
     outputSchema: terminalReadOutputSchema,
     annotations: {
@@ -784,9 +788,14 @@ function createServer(): McpServer {
       idempotentHint: true,
     },
   },
-  async ({ terminal, cursor, limit }) => {
+  async ({ terminal, cursor, limit, screen }) => {
+    if (screen && cursor) {
+      throw new Error("screen=trueとcursorは同時に指定できません。");
+    }
     const args = ["terminal", "read", "--terminal", terminal];
-    if (cursor) {
+    if (screen) {
+      args.push("--screen");
+    } else if (cursor) {
       args.push("--cursor", cursor);
     }
     if (limit !== undefined) {
