@@ -12,4 +12,6 @@ tunnel-client help quickstart
 ~~~
 
 DevSpaceとOrcaには別々のTunnel IDを割り当てる方針です。
+表示名は `DevSpace MCP` / `Orca MCP`、runtime aliasとprofileは
+`devspace-mcp` / `orca-mcp` に揃えます。
 stdio MCPは同じTunnel IDで複数の tunnel-client を同時起動しません。

@@ -5,6 +5,12 @@ import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import * as z from "zod/v4";
 import { runOrca } from "./orca.js";
 
+const ATTACHABLE_AGENT_IDENTITIES = new Set([
+  "omp",
+  "opencode",
+  "codex",
+]);
+
 function result(value: unknown) {
   return {
     content: [
@@ -16,7 +22,7 @@ function result(value: unknown) {
   };
 }
 
-function terminalHandle(value: unknown): string | undefined {
+function terminalAgentIdentity(value: unknown): string | undefined {
   if (!value || typeof value !== "object") {
     return undefined;
   }
@@ -28,8 +34,28 @@ function terminalHandle(value: unknown): string | undefined {
   if (!terminal || typeof terminal !== "object") {
     return undefined;
   }
-  const handle = (terminal as { handle?: unknown }).handle;
-  return typeof handle === "string" ? handle : undefined;
+  const identity = (terminal as { agentIdentity?: unknown }).agentIdentity;
+  return typeof identity === "string" ? identity : undefined;
+}
+
+function createdAgentTerminalHandle(value: unknown): string | undefined {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+  const resultValue = (value as { result?: unknown }).result;
+  if (!resultValue || typeof resultValue !== "object") {
+    return undefined;
+  }
+  const resultObject = resultValue as {
+    agentTerminalHandle?: unknown;
+    startupTerminal?: { handle?: unknown };
+  };
+  if (typeof resultObject.agentTerminalHandle === "string") {
+    return resultObject.agentTerminalHandle;
+  }
+  return typeof resultObject.startupTerminal?.handle === "string"
+    ? resultObject.startupTerminal.handle
+    : undefined;
 }
 
 function safeTerminal(
@@ -46,7 +72,78 @@ function safeTerminal(
     orphaned: terminal.orphaned,
     lastOutputAt: terminal.lastOutputAt,
     executionHostId: terminal.executionHostId,
+    agentIdentity: terminal.agentIdentity,
   };
+}
+
+function safeWorktree(
+  worktree: Record<string, unknown>,
+): Record<string, unknown> {
+  return {
+    id: worktree.id,
+    repoId: worktree.repoId,
+    path: worktree.path,
+    branch: worktree.branch,
+    displayName: worktree.displayName,
+    isMainWorktree: worktree.isMainWorktree,
+    workspaceStatus: worktree.workspaceStatus,
+    isArchived: worktree.isArchived,
+    parentWorktreeId: worktree.parentWorktreeId,
+  };
+}
+
+function worktreesFromResponse(
+  value: unknown,
+): Array<Record<string, unknown>> {
+  if (!value || typeof value !== "object") {
+    return [];
+  }
+  const resultValue = (value as { result?: unknown }).result;
+  if (!resultValue || typeof resultValue !== "object") {
+    return [];
+  }
+  const worktrees = (resultValue as { worktrees?: unknown }).worktrees;
+  return Array.isArray(worktrees)
+    ? worktrees.filter(
+        (worktree): worktree is Record<string, unknown> =>
+          Boolean(worktree) && typeof worktree === "object",
+      )
+    : [];
+}
+
+function terminalsFromResponse(
+  value: unknown,
+): Array<Record<string, unknown>> {
+  if (!value || typeof value !== "object") {
+    return [];
+  }
+  const resultValue = (value as { result?: unknown }).result;
+  if (!resultValue || typeof resultValue !== "object") {
+    return [];
+  }
+  const terminals = (resultValue as { terminals?: unknown }).terminals;
+  return Array.isArray(terminals)
+    ? terminals.filter(
+        (terminal): terminal is Record<string, unknown> =>
+          Boolean(terminal) && typeof terminal === "object",
+      )
+    : [];
+}
+
+function repoIdFromResponse(value: unknown): string | undefined {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+  const resultValue = (value as { result?: unknown }).result;
+  if (!resultValue || typeof resultValue !== "object") {
+    return undefined;
+  }
+  const repo = (resultValue as { repo?: unknown }).repo;
+  if (!repo || typeof repo !== "object") {
+    return undefined;
+  }
+  const id = (repo as { id?: unknown }).id;
+  return typeof id === "string" ? id : undefined;
 }
 
 function sanitizeTerminalResponse(value: unknown): unknown {
@@ -100,16 +197,42 @@ function sanitizeWorktreeResponse(value: unknown): unknown {
   return {
     ok: source.ok,
     result: {
-      worktrees: worktrees.map((worktree) => ({
-        id: worktree.id,
-        repoId: worktree.repoId,
-        path: worktree.path,
-        branch: worktree.branch,
-        displayName: worktree.displayName,
-        isMainWorktree: worktree.isMainWorktree,
-        workspaceStatus: worktree.workspaceStatus,
-        isArchived: worktree.isArchived,
-      })),
+      worktrees: worktrees.map(safeWorktree),
+    },
+  };
+}
+
+function sanitizeCreatedWorktreeResponse(
+  value: unknown,
+  agent: string,
+): unknown {
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+  const source = value as {
+    ok?: unknown;
+    result?: {
+      worktree?: Record<string, unknown>;
+      agentTerminalHandle?: unknown;
+      startupTerminal?: { handle?: unknown };
+      recovered?: unknown;
+    };
+  };
+  const worktree = source.result?.worktree;
+  const handle = createdAgentTerminalHandle(value);
+  if (!worktree || !handle) {
+    return { ok: source.ok, result: {} };
+  }
+
+  return {
+    ok: source.ok,
+    result: {
+      worktree: safeWorktree(worktree),
+      agent: {
+        identity: agent,
+        terminal: handle,
+      },
+      recovered: source.result?.recovered === true,
     },
   };
 }
@@ -119,13 +242,23 @@ function createServer(): McpServer {
     name: "orca-mcp",
     version: "0.1.0",
   });
-  const managedAgentTerminals = new Set<string>();
+  const spawnedAgentTerminals = new Set<string>();
+  const writableAgentTerminals = new Set<string>();
   const terminalQueues = new Map<string, Promise<unknown>>();
+  const createQueues = new Map<string, Promise<unknown>>();
 
-  function assertManagedTerminal(terminal: string): void {
-    if (!managedAgentTerminals.has(terminal)) {
+  function assertWritableTerminal(terminal: string): void {
+    if (!writableAgentTerminals.has(terminal)) {
       throw new Error(
-        "このterminalはorca-mcpが起動したOMP/OpenCodeではないため、書き込み操作を拒否しました。",
+        "このterminalは書き込み対象としてattachされていません。先にorca_attach_terminalで引き継いでください。",
+      );
+    }
+  }
+
+  function assertSpawnedTerminal(terminal: string): void {
+    if (!spawnedAgentTerminals.has(terminal)) {
+      throw new Error(
+        "このterminalはorca-mcpが起動したものではないため、終了操作を拒否しました。",
       );
     }
   }
@@ -144,6 +277,129 @@ function createServer(): McpServer {
         terminalQueues.delete(terminal);
       }
     }
+  }
+
+  async function withCreateLock<T>(
+    repo: string,
+    name: string,
+    action: () => Promise<T>,
+  ): Promise<T> {
+    const key = `${repo}\u0000${name}`;
+    const previous = createQueues.get(key) ?? Promise.resolve();
+    const current = previous.catch(() => undefined).then(action);
+    createQueues.set(key, current);
+    try {
+      return await current;
+    } finally {
+      if (createQueues.get(key) === current) {
+        createQueues.delete(key);
+      }
+    }
+  }
+
+  async function findWorktreeByName(
+    repo: string,
+    name: string,
+  ): Promise<Record<string, unknown> | undefined> {
+    const response = await runOrca([
+      "worktree",
+      "list",
+      "--repo",
+      repo,
+      "--json",
+    ]);
+    const matches = worktreesFromResponse(response).filter(
+      (worktree) =>
+        worktree.displayName === name ||
+        worktree.branch === `refs/heads/${name}`,
+    );
+    return matches.length === 1 ? matches[0] : undefined;
+  }
+
+  async function canonicalRepoSelector(repo: string): Promise<{
+    id: string;
+    selector: string;
+  }> {
+    const response = await runOrca([
+      "repo",
+      "show",
+      "--repo",
+      repo,
+      "--json",
+    ]);
+    const id = repoIdFromResponse(response);
+    if (!id) {
+      throw new Error("Orca repo selectorを正規IDへ解決できませんでした。");
+    }
+    return {
+      id,
+      selector: `id:${id}`,
+    };
+  }
+
+  async function recoverCreatedAgent(
+    repo: string,
+    name: string,
+    agent: string,
+  ): Promise<unknown | undefined> {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      try {
+        const worktree = await findWorktreeByName(repo, name);
+        const worktreeId = worktree?.id;
+        if (typeof worktreeId === "string") {
+          const terminalsResponse = await runOrca([
+            "terminal",
+            "list",
+            "--worktree",
+            `id:${worktreeId}`,
+            "--json",
+          ]);
+          const terminals = terminalsFromResponse(terminalsResponse);
+
+          for (const terminal of terminals) {
+            const handle = terminal.handle;
+            if (typeof handle !== "string") {
+              continue;
+            }
+            if (terminal.agentIdentity === agent) {
+              return {
+                ok: true,
+                result: {
+                  worktree,
+                  agentTerminalHandle: handle,
+                  recovered: true,
+                },
+              };
+            }
+
+            const shown = await runOrca([
+              "terminal",
+              "show",
+              "--terminal",
+              handle,
+              "--json",
+            ]);
+            if (terminalAgentIdentity(shown) === agent) {
+              return {
+                ok: true,
+                result: {
+                  worktree,
+                  agentTerminalHandle: handle,
+                  recovered: true,
+                },
+              };
+            }
+          }
+        }
+      } catch {
+        // Recovery is best-effort. Retry briefly because Orca may still be
+        // finishing work after the client-side create response was lost.
+      }
+      if (attempt < 4) {
+        await new Promise((resolve) => setTimeout(resolve, 1_000));
+      }
+    }
+    return undefined;
   }
 
   server.registerTool(
@@ -215,7 +471,8 @@ function createServer(): McpServer {
   server.registerTool(
   "orca_read_terminal",
   {
-    description: "Orca terminalの出力を読み取ります。",
+    description:
+      "Orca terminalの出力を読み取ります。既存のOMP/OpenCodeやshellもレビュー対象として読めます。",
     inputSchema: z.object({
       terminal: z.string().min(1).describe("Orca terminal handle"),
       cursor: z.string().min(1).optional(),
@@ -228,7 +485,6 @@ function createServer(): McpServer {
     },
   },
   async ({ terminal, cursor, limit }) => {
-    assertManagedTerminal(terminal);
     const args = ["terminal", "read", "--terminal", terminal];
     if (cursor) {
       args.push("--cursor", cursor);
@@ -242,10 +498,68 @@ function createServer(): McpServer {
   );
 
   server.registerTool(
+  "orca_attach_terminal",
+  {
+    description:
+      "OrcaがOMP/OpenCode/Codexと認識している既存terminalを引き継ぎ、ChatGPTから追加指示を送れるようにします。送信前にorca_read_terminalで内容を確認してください。",
+    inputSchema: z.object({
+      terminal: z.string().min(1).describe("Orca terminal handle"),
+    }),
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+    },
+  },
+  async ({ terminal }) => {
+    const response = await runOrca([
+      "terminal",
+      "show",
+      "--terminal",
+      terminal,
+      "--json",
+    ]);
+    const identity = terminalAgentIdentity(response);
+    if (!identity || !ATTACHABLE_AGENT_IDENTITIES.has(identity)) {
+      throw new Error(
+        "このterminalはOMP/OpenCode/Codexとして認識されていないためattachできません。",
+      );
+    }
+    writableAgentTerminals.add(terminal);
+    return result(sanitizeTerminalResponse(response));
+  },
+  );
+
+  server.registerTool(
+  "orca_detach_terminal",
+  {
+    description:
+      "既存terminalの引き継ぎを解除します。terminal自体は終了せず、以後の入力だけを拒否します。",
+    inputSchema: z.object({
+      terminal: z.string().min(1).describe("Orca terminal handle"),
+    }),
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+    },
+  },
+  async ({ terminal }) => {
+    if (!spawnedAgentTerminals.has(terminal)) {
+      writableAgentTerminals.delete(terminal);
+    }
+    return result({
+      terminal,
+      writable: writableAgentTerminals.has(terminal),
+    });
+  },
+  );
+
+  server.registerTool(
   "orca_send_terminal",
   {
     description:
-      "orca-mcpが起動したOMP/OpenCodeへ追加指示を送ります。通常のshellや既存terminalには送信しません。",
+      "orca-mcpが起動したterminal、またはorca_attach_terminalで引き継いだ既存terminalへ追加指示を送ります。",
     inputSchema: z.object({
       terminal: z.string().min(1).describe("Orca terminal handle"),
       text: z.string().min(1).max(20_000),
@@ -259,9 +573,9 @@ function createServer(): McpServer {
     },
   },
   async ({ terminal, text, enter, waitSubmitSeconds }) => {
-    assertManagedTerminal(terminal);
+    assertWritableTerminal(terminal);
     return withTerminalWriteLock(terminal, async () => {
-      assertManagedTerminal(terminal);
+      assertWritableTerminal(terminal);
       const args = [
         "terminal",
         "send",
@@ -299,7 +613,6 @@ function createServer(): McpServer {
     },
   },
   async ({ terminal, state, timeoutMs }) => {
-    assertManagedTerminal(terminal);
     return result(
       await runOrca(
         [
@@ -314,21 +627,33 @@ function createServer(): McpServer {
           "--json",
         ],
         timeoutMs + 5_000,
+        "wait",
       ),
     );
   },
   );
 
   server.registerTool(
-  "orca_start_agent",
+  "orca_create_agent_worktree",
   {
     description:
-      "指定したOrca worktreeでOMPまたはOpenCodeを新しいterminalとして起動します。",
+      "Orcaのagent-aware launcherを使い、新しいworktreeとOMP/OpenCode/Codexをまとめて起動します。",
     inputSchema: z.object({
-      worktree: z.string().min(1).describe("Orca worktree selector"),
-      agent: z.enum(["omp", "opencode"]),
-      title: z.string().min(1).max(80).optional(),
-      focus: z.boolean().default(false),
+      repo: z.string().min(1).describe("Orca repo selector"),
+      name: z.string().min(1).max(80).describe("新しいworktree名"),
+      agent: z.enum(["omp", "opencode", "codex"]),
+      prompt: z.string().min(1).max(20_000).optional(),
+      setup: z.enum(["inherit", "run", "skip"]).default("inherit"),
+      parentWorktree: z
+        .string()
+        .min(1)
+        .describe("stacked workにする場合の親worktree selector")
+        .optional(),
+      baseBranch: z
+        .string()
+        .min(1)
+        .describe("明示的にGit baseを変える場合だけ指定")
+        .optional(),
     }),
     annotations: {
       readOnlyHint: false,
@@ -336,36 +661,91 @@ function createServer(): McpServer {
       idempotentHint: false,
     },
   },
-  async ({ worktree, agent, title, focus }) => {
-    const args = [
-      "terminal",
-      "create",
-      "--worktree",
-      worktree,
-      "--command",
-      agent,
-    ];
-    if (title) {
-      args.push("--title", title);
-    }
-    if (focus) {
-      args.push("--focus");
-    }
-    args.push("--json");
-    const response = await runOrca(args);
-    const handle = terminalHandle(response);
-    if (!handle) {
-      throw new Error("Orcaが作成したterminal handleを取得できませんでした。");
-    }
-    managedAgentTerminals.add(handle);
-    return result(sanitizeTerminalResponse(response));
+  async ({
+    repo,
+    name,
+    agent,
+    prompt,
+    setup,
+    parentWorktree,
+    baseBranch,
+  }) => {
+    const canonicalRepo = await canonicalRepoSelector(repo);
+    return withCreateLock(canonicalRepo.id, name, async () => {
+      if (await findWorktreeByName(canonicalRepo.selector, name)) {
+        throw new Error(
+          "同名のOrca worktreeが既に存在します。別のnameを指定してください。",
+        );
+      }
+
+      const args = [
+        "worktree",
+        "create",
+        "--repo",
+        canonicalRepo.selector,
+        "--name",
+        name,
+        "--agent",
+        agent,
+        "--setup",
+        setup,
+      ];
+      if (parentWorktree) {
+        args.push("--parent-worktree", parentWorktree);
+      } else {
+        args.push("--no-parent");
+      }
+      if (baseBranch) {
+        args.push("--base-branch", baseBranch);
+      }
+      if (prompt) {
+        args.push("--prompt", prompt);
+      }
+      args.push("--json");
+
+      let response: unknown;
+      try {
+        response = await runOrca(args, 180_000);
+      } catch (error) {
+        const recovered = await recoverCreatedAgent(
+          canonicalRepo.selector,
+          name,
+          agent,
+        );
+        if (!recovered) {
+          throw error;
+        }
+        response = recovered;
+      }
+
+      let handle = createdAgentTerminalHandle(response);
+      if (!handle) {
+        const recovered = await recoverCreatedAgent(
+          canonicalRepo.selector,
+          name,
+          agent,
+        );
+        if (recovered) {
+          response = recovered;
+          handle = createdAgentTerminalHandle(recovered);
+        }
+      }
+      if (!handle) {
+        throw new Error(
+          "Orcaが作成したagent terminal handleを取得できず、再発見にも失敗しました。",
+        );
+      }
+      spawnedAgentTerminals.add(handle);
+      writableAgentTerminals.add(handle);
+      return result(sanitizeCreatedWorktreeResponse(response, agent));
+    });
   },
   );
 
   server.registerTool(
   "orca_close_terminal",
   {
-    description: "orca-mcpが起動したOMP/OpenCodeのterminalだけを終了して閉じます。",
+    description: "orca-mcpが起動したOMP/OpenCode/Codexのterminalだけを終了して閉じます。",
     inputSchema: z.object({
       terminal: z.string().min(1).describe("Orca terminal handle"),
     }),
@@ -376,9 +756,9 @@ function createServer(): McpServer {
     },
   },
   async ({ terminal }) => {
-    assertManagedTerminal(terminal);
+    assertSpawnedTerminal(terminal);
     return withTerminalWriteLock(terminal, async () => {
-      assertManagedTerminal(terminal);
+      assertSpawnedTerminal(terminal);
       const response = await runOrca([
         "terminal",
         "close",
@@ -386,7 +766,8 @@ function createServer(): McpServer {
         terminal,
         "--json",
       ]);
-      managedAgentTerminals.delete(terminal);
+      spawnedAgentTerminals.delete(terminal);
+      writableAgentTerminals.delete(terminal);
       return result(response);
     });
   },

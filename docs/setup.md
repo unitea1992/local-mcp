@@ -33,7 +33,8 @@ tunnel-client は、このリポジトリで動作確認したバージョンを
 Orca用とDevSpace用を分けます。
 片方の設定に問題が起きても、もう片方を復旧経路として残せるためです。
 
-名前は `local-mcp-orca` と `local-mcp-devspace` を推奨します。
+表示名は `Orca MCP` と `DevSpace MCP` を推奨します。
+ローカルで使うaliasとprofileは `orca-mcp` と `devspace-mcp` に揃えます。
 それぞれ、利用するChatGPT WorkspaceまたはOrganizationへ関連付けます。
 作成後に表示されるTunnel IDはGitへ保存しません。
 
@@ -65,25 +66,27 @@ Orca MCPはstdioなので、OAuthやHTTPサーバーの設定が不要です。
 
 ~~~bash
 pnpm build
-LOCAL_MCP_ROOT="$(pwd -P)"
+LOCAL_MCP_ROOT="$(git rev-parse --show-toplevel)"
 
 tunnel-client runtimes connect \
-  --alias local-mcp-orca \
-  --profile local-mcp-orca \
+  --alias orca-mcp \
+  --profile orca-mcp \
   --tunnel-id "$ORCA_TUNNEL_ID" \
   --runtime-api-key "file:$HOME/.config/local-mcp/runtime-api-key" \
   --mcp-command "node $LOCAL_MCP_ROOT/apps/orca-mcp/dist/index.js" \
   --json
 
-tunnel-client runtimes status local-mcp-orca --json
+tunnel-client runtimes status orca-mcp --json
 ~~~
 
 ChatGPT側ではSecure MCP Tunnelを使う接続先として、Orca用Tunnel IDを選びます。
 接続後はworktree一覧とterminal一覧から確認します。
 
-初期版のOrca MCPは安全側に絞っています。
-既存terminalの一覧と状態は確認できますが、詳細な読み取り・入力・待機・終了は、
-orca-mcp自身が起動したOMP / OpenCodeだけが対象です。
+既存terminalの出力も読み取れます。
+途中案件を引き継ぐ場合は、対象terminalを確認してから `orca_attach_terminal` を実行すると、
+そのterminalへ追加指示を送れます。
+attach対象はOrcaがOMP / OpenCode / Codexとして認識しているterminalに限ります。
+既存terminalの終了だけはChatGPTから行いません。
 
 ## DevSpaceはOAuth込みで確認する
 
@@ -93,12 +96,12 @@ tunnel-client が用意するDCR向けサンプルからプロファイルを生
 ~~~bash
 tunnel-client init \
   --sample sample_mcp_with_dcr \
-  --profile local-mcp-devspace \
+  --profile devspace-mcp \
   --tunnel-id "$DEVSPACE_TUNNEL_ID" \
   --mcp-server-url http://127.0.0.1:7676/mcp \
   --control-plane-api-key-ref "file:$HOME/.config/local-mcp/runtime-api-key"
 
-tunnel-client doctor --profile local-mcp-devspace --explain
+tunnel-client doctor --profile devspace-mcp --explain
 ~~~
 
 loopback HTTPのOAuth discoveryで追加設定が必要な場合は、doctorの結果と、
@@ -126,8 +129,8 @@ Secure MCP TunnelはMCP本体への経路を非公開にできますが、OAuth�
 ~~~bash
 ./scripts/status.sh
 ./scripts/doctor.sh
-tunnel-client runtimes status local-mcp-orca --json
-tunnel-client doctor --profile local-mcp-devspace --explain
+tunnel-client runtimes status orca-mcp --json
+tunnel-client doctor --profile devspace-mcp --explain
 ~~~
 
 API key、OAuth token、パスワードはChatGPTへ貼り付けません。

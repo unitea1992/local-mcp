@@ -2,7 +2,23 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
-const MAX_CONCURRENT_ORCA_CALLS = 4;
+type OrcaConcurrencyGroup = "default" | "wait";
+
+const concurrency = {
+  default: {
+    limit: 4,
+    active: 0,
+    waiters: [] as Array<() => void>,
+  },
+  wait: {
+    limit: 16,
+    active: 0,
+    waiters: [] as Array<() => void>,
+  },
+} satisfies Record<
+  OrcaConcurrencyGroup,
+  { limit: number; active: number; waiters: Array<() => void> }
+>;
 const SAFE_ENV_NAMES = new Set([
   "HOME",
   "PATH",
@@ -24,9 +40,6 @@ const SAFE_ENV_NAMES = new Set([
   "WAYLAND_DISPLAY",
 ]);
 
-let activeCalls = 0;
-const waiters: Array<() => void> = [];
-
 export type OrcaResult = unknown;
 
 export function orcaExecutable(): string {
@@ -44,11 +57,13 @@ export function orcaEnvironment(
 export async function runOrca(
   args: string[],
   timeoutMs = 30_000,
+  concurrencyGroup: OrcaConcurrencyGroup = "default",
 ): Promise<OrcaResult> {
-  if (activeCalls >= MAX_CONCURRENT_ORCA_CALLS) {
-    await new Promise<void>((resolve) => waiters.push(resolve));
+  const state = concurrency[concurrencyGroup];
+  if (state.active >= state.limit) {
+    await new Promise<void>((resolve) => state.waiters.push(resolve));
   }
-  activeCalls += 1;
+  state.active += 1;
 
   try {
     const { stdout, stderr } = await execFileAsync(orcaExecutable(), args, {
@@ -73,8 +88,8 @@ export async function runOrca(
       return { ok: true, output };
     }
   } finally {
-    activeCalls -= 1;
-    waiters.shift()?.();
+    state.active -= 1;
+    state.waiters.shift()?.();
   }
 }
 

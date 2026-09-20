@@ -72,14 +72,35 @@ node apps/orca-mcp/dist/index.js
 
 通常は人間が直接起動するのではなく、Secure MCP Tunnelから子プロセスとして起動します。
 
-## Secure MCP Tunnelを再起動したら、以前のagentはOrcaに残る
+新しい作業をChatGPT側から始める場合は、`orca_create_agent_worktree` を使います。
+Orcaのagent-aware launcherで新しいworktreeとOMP / OpenCode / Codexをまとめて作るため、
+Orcaに設定しているagent commandや既定引数を迂回しません。
 
-orca-mcpは、自分が起動したOMP / OpenCodeだけに読み書きできます。
-この管理情報はMCPプロセスの再起動をまたいで引き継ぎません。
+既存worktreeで途中まで進んでいる作業は、新しくagentを生やさず既存terminalを読み、
+必要なら `orca_attach_terminal` で引き継ぎます。
 
-そのためSecure MCP Tunnelを再起動した後も以前のagent terminalはOrcaに残りますが、
-ChatGPTからそのterminalへ勝手に再接続することはありません。
-続きが必要ならOrca側で状態を確認し、新しいagentをChatGPTから起動するか、人間が既存terminalを引き継ぎます。
+現行Orcaには、既存worktreeへagent-awareに新しいterminalを追加するCLIがありません。
+`terminal create --command` はOrcaのagent commandや既定引数を迂回するため、orca-mcpでは使いません。
+同じworktreeへ新しいagentが必要な場合はOrca側で起動し、そのterminalをChatGPTからattachします。
+
+## Secure MCP Tunnelを再起動したら、既存agentを読み直してattachする
+
+orca-mcpは既存terminalの出力も読めます。
+ただし、書き込み対象としてattachした情報はMCPプロセスの再起動をまたいで引き継ぎません。
+
+Secure MCP Tunnelを再起動した後も、以前のagent terminalはOrcaに残ります。
+ChatGPTから出力を読み直し、続きが必要なterminalだけ `orca_attach_terminal` で再度引き継ぎます。
+
+## Tunnel名は表示用と内部用を分ける
+
+人間向けの表示名は `Orca MCP` / `DevSpace MCP` です。
+コマンドで使うruntime aliasとprofileは `orca-mcp` / `devspace-mcp` にします。
+日常の確認も短い内部名を使います。
+
+~~~bash
+tunnel-client runtimes status orca-mcp --json
+tunnel-client doctor --profile devspace-mcp --explain
+~~~
 
 ## 用語
 

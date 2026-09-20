@@ -46,22 +46,31 @@ Cloudflare companionは今回使わないため導入しません。
 status.sh は依存ツールと現在の状態を確認します。
 doctor.sh は問題が起きたときの診断、check.sh はこのリポジトリ自身の型検査・テスト・Markdown検査をまとめて実行します。
 
-## Orca MCPは任意のシェルを公開しない
+## Orca MCPは途中の開発セッションも引き継げる
 
-orca-mcp はOrca CLIを安全側に絞って公開します。
-任意のシェルコマンドは受け付けず、書き込み操作はorca-mcp自身が起動したOMP / OpenCodeのterminalだけに限定します。
-既存terminalは一覧と状態だけ確認でき、previewと出力本文は返しません。
+普段からOMP / OpenCodeをフルアクセスで使う前提なので、既存terminalの出力も読めます。
+途中まで進めた案件をChatGPTからレビューし、そのまま軌道修正や部分的な引き継ぎができます。
+
+既存terminalへ入力するときだけ `orca_attach_terminal` を1回挟みます。
+これは権限制限ではなく、別のterminalへ誤送信しないためのガードです。
+attachできるのは、OrcaがOMP / OpenCode / Codexとして認識しているterminalです。
+引き継ぎを解除したい場合は `orca_detach_terminal` を使い、terminal自体は残します。
+既存terminalの終了はChatGPTから行わず、orca-mcp自身が起動したterminalだけ閉じられます。
 
 - worktree一覧
 - terminal一覧・状態確認
-- orca-mcpが起動したagent terminalの出力読み取り
-- orca-mcpが起動したagent terminalへの入力
-- orca-mcpが起動したagent terminalの待機
-- OMP / OpenCodeの起動
-- terminalの終了
+- 既存terminalを含む出力読み取り
+- 既存terminalの引き継ぎ
+- 既存terminalの引き継ぎ解除
+- 引き継いだterminalへの入力・待機
+- 新しいworktreeとOMP / OpenCode / Codexの起動
+- orca-mcpが起動したterminalの終了
 
 DevSpaceは本体を改造しません。
 Secure MCP Tunnelとの接続設定だけをこのリポジトリで管理します。
+
+Secure MCP Tunnelの表示名は `Orca MCP` と `DevSpace MCP`、内部alias/profileは
+`orca-mcp` と `devspace-mcp` を使います。
 
 ## 秘密情報はGitに入れない
 

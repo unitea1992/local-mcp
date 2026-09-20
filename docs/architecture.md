@@ -38,20 +38,38 @@ Tunnelの作成や更新に必要なManage権限は、常駐runtimeから分離�
 Orca用Tunnelを複数ユーザーのWorkspaceへ共有すると、orca-mcp単体ではterminal handleの所有者を利用者ごとに分離できません。
 共有利用へ広げる場合は、利用者単位の認可を追加するまで同じruntimeを使い回しません。
 
-## Orca MCPはOrcaの限定操作だけを公開する
+## Orca MCPは既存セッションをレビューして引き継げる
 
 DevSpaceには汎用的なシェル実行があります。
-同じ機能をOrca MCPへ重複して持たせる必要はありません。
+そのためOrca MCPだけを厳しく制限しても、環境全体の権限分離にはなりません。
+Orca MCPでは、普段の開発フローを邪魔しないことと誤操作を防ぐことの両方を優先します。
 
-Orca MCPが公開するのは、Orca CLIの限定操作だけです。
-agent起動は omp と opencode のallowlistに限定します。
-さらに入力と終了操作は、orca-mcp自身が起動したagent terminalだけを対象にします。
-既存terminalは一覧と状態だけに絞り、previewや出力本文を返しません。
-通常のシェルへ誤ってコマンドを送り、その内容をChatGPTへ漏らす経路を作らないためです。
+terminalの一覧、状態、出力本文は既存セッションも含めて読めます。
+これにより、Orca側で途中まで進めたOMP / OpenCodeの作業をChatGPTからレビューできます。
 
-orca-mcpが管理するterminal一覧はメモリ上だけに持ちます。
-orca-mcpやSecure MCP Tunnelが再起動しても、実行中のOMP / OpenCodeはOrca側に残しますが、再起動後のorca-mcpからは書き込みません。
-自動復旧のために古いterminal handleを信用するより、作業を失わず安全側へ倒す方を優先します。
+既存terminalへ入力するときは `orca_attach_terminal` で明示的に引き継ぎます。
+attach後は追加指示を送り、待機状態を確認できます。
+attachできるのは、Orcaが `agentIdentity` でOMP / OpenCode / Codexと認識しているterminalだけです。
+手動でOpenCodeを起動した場合もOrca 1.4.205で `agentIdentity` が付くことを確認しています。
+誤ってattachした場合は `orca_detach_terminal` で書き込み対象から外せます。
+既存terminalの終了だけは許可せず、orca-mcp自身が起動したterminalに限定します。
+別のterminalを誤って閉じる事故を避けるためです。
+
+新しいagentは、既存worktreeへ文字列コマンドで起動しません。
+Orcaの `worktree create --agent` を使い、新しいworktreeとagentをまとめて作成します。
+これにより、Orcaに設定したagent command、既定引数、環境変数をそのまま利用できます。
+対象はOMP / OpenCode / Codexです。
+
+orca-mcpが書き込み対象としてattachしたterminal一覧はメモリ上だけに持ちます。
+Orca MCPやSecure MCP Tunnelが再起動しても、実行中のOMP / OpenCodeはOrca側に残ります。
+再起動後は出力を読み直して、必要なterminalだけ再度attachします。
+
+## 表示名と内部名は短く分ける
+
+ChatGPTやOpenAI Platformで人間が見るTunnel名は `Orca MCP` と `DevSpace MCP` にします。
+ローカルruntime aliasとprofileは、それぞれ `orca-mcp` と `devspace-mcp` に揃えます。
+
+リポジトリ名がすでに `local-mcp` なので、内部名へさらに `local-mcp-` を重ねる必要はありません。
 
 ## ユーザーとChatGPTが同じterminalを見る
 
