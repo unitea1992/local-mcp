@@ -80,6 +80,29 @@ systemctl --user status local-mcp-orca-tunnel.service
 
 ChatGPT側では `Orca MCP` Connectorからworktree一覧を取得できれば完了です。
 
+## XServer MCPをChatGPTへ接続する
+
+OpenAI Platformで `XServer MCP` という別Tunnelを作り、Orca MCPと同じOrganization / ChatGPT Workspaceへ関連付けます。
+常駐runtime用API keyは新規発行せず、既存の `~/.config/local-mcp/runtime-api-key` を共有します。
+XServer側の認証は `~/.local/bin/xserver-mcp-official` が既存の暗号化credentialから読み込みます。
+
+Tunnel IDを取得したら次を実行します。
+
+~~~bash
+./scripts/configure-xserver-tunnel.sh tunnel_...
+~~~
+
+このスクリプトは次をまとめて行います。
+
+1. Tunnelが既存Orca Tunnelと同じOrganization / Workspaceに属することを確認する
+2. `xserver-mcp` profileを生成する
+3. `local-mcp-xserver-tunnel.service` を有効化して起動する
+
+serviceは `Restart=always` で、user lingerが有効な環境ではOS再起動後も自動復帰します。
+
+ChatGPT側では新規プラグインの接続方式を「トンネル」にし、作成した `XServer MCP` Tunnelを選択します。
+XServer API keyはread-onlyのまま使います。
+
 ## 秘密値を出さずに診断する
 
 ~~~bash

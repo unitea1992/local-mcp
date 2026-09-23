@@ -8,8 +8,9 @@ ChatGPTからローカル開発環境へ接続する経路と、Orca向けMCPを
 ChatGPT
   │
   ├─ DevSpace Local ─ Tailscale Funnel ─ DevSpace + OAuth
+  ├─ Orca MCP ─ Secure MCP Tunnel ─ orca-mcp ─ Orca ─ OMP / OpenCode / Codex
   │
-  └─ Orca MCP ─ Secure MCP Tunnel ─ orca-mcp ─ Orca ─ OMP / OpenCode / Codex
+  └─ XServer MCP ─ Secure MCP Tunnel ─ XServer公式MCP ─ XServer API
 ~~~
 
 DevSpaceはもともとのHTTP + OAuth構成をそのまま使います。
@@ -30,6 +31,7 @@ DevSpaceをSecure MCP Tunnelへ移す案も実機検証しましたが、OAuth�
 | --- | --- | --- |
 | DevSpace Local | ファイル、shell、Git、ローカルagent | DevSpace OAuth + Tailscale Funnel |
 | Orca MCP | Orca terminalとOMP / OpenCode / Codexの操作 | Secure MCP Tunnel + ChatGPT Workspace |
+| XServer MCP | XServerの設定・負荷・ログ・ドメイン情報の参照 | Secure MCP Tunnel + read-only XServer API key |
 
 `DevSpace Local` も通信方式はMCPです。
 名前の `Local` は「Secure MCP Tunnel版ではなく、既存のDevSpaceへ直接接続する経路」という識別用です。
@@ -46,6 +48,12 @@ Orca Tunnelを初めて常駐化するときは次を使います。
 
 ~~~bash
 ./scripts/install-orca-tunnel-service.sh
+~~~
+
+XServer用TunnelをPlatformで作成した後は、Tunnel IDを指定してprofileと常駐serviceをまとめて設定します。
+
+~~~bash
+./scripts/configure-xserver-tunnel.sh tunnel_...
 ~~~
 
 `tunnel-client` 自体の更新は `./scripts/install-tunnel-client.sh` で行います。
@@ -66,7 +74,7 @@ Orcaに設定したagent commandや既定引数を迂回しません。
 ## 秘密情報はGitに入れない
 
 Runtime API keyは `~/.config/local-mcp/runtime-api-key` に置き、Gitへ保存しません。
-常駐Orca TunnelにはTunnelsのRead + Useだけを持つRestricted keyを使います。
+常駐Orca / XServer Tunnelは同じRestricted keyを共有し、TunnelsのRead + Useだけを持たせます。
 
 実際のTunnel profileは `~/.config/local-mcp/tunnel-profiles/` に置きます。
 リポジトリには生成手順と運用方針だけを残します。

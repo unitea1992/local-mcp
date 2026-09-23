@@ -1,0 +1,15 @@
+[Unit]
+Description=OpenAI Secure MCP Tunnel for XServer MCP
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=-%h/.config/local-mcp/tunnel.env
+ExecStart=/bin/bash -c 'source "$HOME/.nvm/nvm.sh" && exec "$HOME/.local/bin/tunnel-client" run --profile-dir "$HOME/.config/local-mcp/tunnel-profiles" --profile xserver-mcp'
+Restart=always
+RestartSec=5
+UMask=0077
+
+[Install]
+WantedBy=default.target

@@ -87,6 +87,14 @@ if command -v tunnel-client >/dev/null 2>&1; then
       echo "Orca MCP Tunnel profile: NG"
       failed=1
     fi
+    if [[ -f "$PROFILE_DIR/xserver-mcp.yaml" ]]; then
+      if tunnel-client doctor --profile-dir "$PROFILE_DIR" --profile xserver-mcp >/dev/null 2>&1; then
+        echo "XServer MCP Tunnel profile: OK"
+      else
+        echo "XServer MCP Tunnel profile: NG"
+        failed=1
+      fi
+    fi
   fi
 else
   echo "tunnel-client: not installed"
@@ -98,6 +106,15 @@ if systemctl_user is-active --quiet local-mcp-orca-tunnel.service 2>/dev/null; t
 else
   echo "Orca MCP Tunnel service: inactive"
   failed=1
+fi
+
+if [[ -f "$PROFILE_DIR/xserver-mcp.yaml" ]]; then
+  if systemctl_user is-active --quiet local-mcp-xserver-tunnel.service 2>/dev/null; then
+    echo "XServer MCP Tunnel service: active"
+  else
+    echo "XServer MCP Tunnel service: inactive"
+    failed=1
+  fi
 fi
 
 exit "$failed"

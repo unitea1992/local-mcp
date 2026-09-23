@@ -1,4 +1,4 @@
-# DevSpaceは直接接続、OrcaだけSecure MCP Tunnelを使う
+# DevSpaceは直接接続、stdio MCPはSecure MCP Tunnelを使う
 
 ## 接続方式は同じ形へ無理に統一しない
 
@@ -57,6 +57,15 @@ Secure MCP Tunnelを使う価値がDevSpaceより明確です。
 
 常駐runtimeにはTunnelsのRead + Useだけを持つRestricted keyを渡します。
 Tunnelの作成・更新に必要なManage権限は常駐プロセスへ渡しません。
+
+## XServer MCPもSecure MCP Tunnelへ直接つなぐ
+
+XServer公式MCPはstdioで動作するため、自作のHTTPラッパーやOAuthサーバーを追加しません。
+Orcaとは別Tunnel / 別profileにし、長寿命runtime用のRestricted API keyだけ共有します。
+XServer API keyはread-onlyで、サーバー設定・負荷・ログ・ドメイン情報の参照に限定します。
+
+XServer Tunnelは `local-mcp-xserver-tunnel.service` で常駐させます。
+Orca Tunnelと同じく `Restart=always` とuser lingerでOS再起動後も復帰します。
 
 ## Orca Tunnelはsystemd user serviceで常駐する
 

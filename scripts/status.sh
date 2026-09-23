@@ -63,6 +63,14 @@ if command -v tunnel-client >/dev/null 2>&1; then
   else
     echo "inactive"
   fi
+  if [[ -f "$PROFILE_DIR/xserver-mcp.yaml" || -f "$HOME/.config/systemd/user/local-mcp-xserver-tunnel.service" ]]; then
+    printf "XServer Tunnel service: "
+    if systemctl_user is-active --quiet local-mcp-xserver-tunnel.service 2>/dev/null; then
+      echo "active"
+    else
+      echo "inactive"
+    fi
+  fi
 fi
 
 echo

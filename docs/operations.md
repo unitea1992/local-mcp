@@ -9,7 +9,7 @@
 ./scripts/status.sh
 ~~~
 
-DevSpace、Orca、tunnel-client、Orca Tunnel service、Tailscale Funnelの状態をまとめて確認します。
+DevSpace、Orca、tunnel-client、Orca / XServer Tunnel service、Tailscale Funnelの状態をまとめて確認します。
 秘密情報の値は表示しません。
 
 ## 何か動かない → doctor.sh
@@ -18,7 +18,7 @@ DevSpace、Orca、tunnel-client、Orca Tunnel service、Tailscale Funnelの状�
 ./scripts/doctor.sh
 ~~~
 
-DevSpaceの診断、Orca CLI、`orca-mcp` profile、Orca Tunnel serviceを確認します。
+DevSpaceの診断、Orca CLI、Secure MCP Tunnel profiles、Orca / XServer Tunnel serviceを確認します。
 
 ## Orca MCPだけ接続できない → systemdログを見る
 
@@ -36,6 +36,23 @@ serviceを入れ直す場合は次を実行します。
 profileは `~/.config/local-mcp/tunnel-profiles/orca-mcp.yaml`、
 Runtime API keyは `~/.config/local-mcp/runtime-api-key` にあります。
 organization contextは `~/.config/local-mcp/tunnel.env` にあります。
+
+## XServer MCPだけ接続できない → XServer Tunnelを見る
+
+~~~bash
+systemctl --user status local-mcp-xserver-tunnel.service
+journalctl --user -u local-mcp-xserver-tunnel.service -n 100 --no-pager
+tunnel-client doctor --profile-dir "$HOME/.config/local-mcp/tunnel-profiles" --profile xserver-mcp
+~~~
+
+serviceを入れ直す場合は次を実行します。
+
+~~~bash
+./scripts/install-xserver-tunnel-service.sh
+~~~
+
+profileは `~/.config/local-mcp/tunnel-profiles/xserver-mcp.yaml` です。
+Runtime API keyとorganization contextはOrca Tunnelと共用します。
 
 ChatGPT側で `tunnel_active_organization_required` が出る場合は、
 まず `doctor.sh` でローカルruntimeのorganization contextが設定済みか確認します。
