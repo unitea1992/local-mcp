@@ -32,7 +32,7 @@ Runtime keyとAdmin keyは `local-mcp` 自身が所有するため、同じ `~/.
 ~~~bash
 ./scripts/create-secure-mcp-tunnel.sh \
   "AliNavigator MCP" \
-  "Routes ChatGPT traffic to the local AliNavigator MCP server"
+  "ChatGPTからAliNavigator APIを利用し、AliExpressとAmazon.co.jpの商品情報を取得するためのローカルMCP"
 ~~~
 
 Tunnel管理を自動化する場合は、Platformで `Local MCP Admin` というAdmin API keyを別途作成し、

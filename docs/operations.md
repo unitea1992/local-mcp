@@ -45,6 +45,8 @@ Tunnel管理用Admin API keyは `~/.config/local-mcp/admin-api-key` にありま
 ./scripts/create-secure-mcp-tunnel.sh "<name>" "<description>"
 ~~~
 
+`description` はChatGPT / Platform上でそのまま表示されるため、日本語で記述します。
+
 Tunnelの作成・更新・削除に使うAdmin API keyは
 `~/.config/local-mcp/admin-api-key` にあります。
 Runtime keyとは分離し、常駐serviceへは渡しません。
