@@ -2,7 +2,7 @@
 
 ## 接続方式は同じ形へ無理に統一しない
 
-local-mcpでは、DevSpaceとOrcaに同じ接続方式を強制しません。
+local-mcpでは、管理対象のMCPへ同じ接続方式を強制しません。
 それぞれの既存設計に合う、最も少ない部品で運用できる経路を使います。
 
 ~~~text
@@ -66,6 +66,14 @@ XServer API keyはread-onlyで、サーバー設定・負荷・ログ・ドメ�
 
 XServer Tunnelは `local-mcp-xserver-tunnel.service` で常駐させます。
 Orca Tunnelと同じく `Restart=always` とuser lingerでOS再起動後も復帰します。
+
+## AliNavigator MCPもサービス側実装とTunnel運用を分離する
+
+AliNavigator固有のMCP toolsとGateway clientは alinavigator-api リポジトリで管理します。
+local-mcp はその実装を所有せず、~/.local/bin/alinavigator-mcp launcherをSecure MCP Tunnelから起動するprofile、systemd、診断だけを管理します。
+
+これによりGatewayの公開契約変更とMCP tool変更を同じリポジトリで確認でき、Tunnel方式を将来変更してもAliNavigatorのMCP本体を移動せずに済みます。
+Gateway Access Service Tokenは ~/.config/local-mcp/alinavigator.env から子プロセスへ渡し、tool引数やprofileへ埋め込みません。
 
 ## Orca Tunnelはsystemd user serviceで常駐する
 
