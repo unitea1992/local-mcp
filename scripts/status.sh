@@ -2,6 +2,7 @@
 set -u
 
 PROFILE_DIR="${LOCAL_MCP_PROFILE_DIR:-$HOME/.config/local-mcp/tunnel-profiles}"
+ADMIN_KEY="$HOME/.config/local-mcp/admin-api-key"
 
 systemctl_user() {
   local runtime_dir
@@ -36,6 +37,16 @@ check_command devspace
 check_command tunnel-client
 
 echo
+printf "Local MCP Admin key: "
+if [[ ! -s "$ADMIN_KEY" ]]; then
+  echo "not configured"
+elif [[ "$(stat -Lc '%u' "$ADMIN_KEY")" == "$(id -u)" && "$(stat -Lc '%a' "$ADMIN_KEY")" == "600" ]]; then
+  echo "configured (mode 600)"
+else
+  echo "configured (unsafe permissions)"
+fi
+
+echo
 if command -v devspace >/dev/null 2>&1; then
   printf "DevSpace:       "
   devspace --version 2>/dev/null || echo "version unavailable"
@@ -66,6 +77,14 @@ if command -v tunnel-client >/dev/null 2>&1; then
   if [[ -f "$PROFILE_DIR/xserver-mcp.yaml" || -f "$HOME/.config/systemd/user/local-mcp-xserver-tunnel.service" ]]; then
     printf "XServer Tunnel service: "
     if systemctl_user is-active --quiet local-mcp-xserver-tunnel.service 2>/dev/null; then
+      echo "active"
+    else
+      echo "inactive"
+    fi
+  fi
+  if [[ -f "$PROFILE_DIR/alinavigator-mcp.yaml" || -f "$HOME/.config/systemd/user/local-mcp-alinavigator-tunnel.service" ]]; then
+    printf "AliNavigator Tunnel service: "
+    if systemctl_user is-active --quiet local-mcp-alinavigator-tunnel.service 2>/dev/null; then
       echo "active"
     else
       echo "inactive"

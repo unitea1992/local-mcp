@@ -36,6 +36,18 @@ serviceを入れ直す場合は次を実行します。
 profileは `~/.config/local-mcp/tunnel-profiles/orca-mcp.yaml`、
 Runtime API keyは `~/.config/local-mcp/runtime-api-key` にあります。
 organization contextは `~/.config/local-mcp/tunnel.env` にあります。
+Tunnel管理用Admin API keyは `~/.config/local-mcp/admin-api-key` にあります。
+
+新しいTunnelを作る場合は、Organization / Workspace IDを手入力せず、
+既存Orca profileからscopeを継承する共通スクリプトを使います。
+
+~~~bash
+./scripts/create-secure-mcp-tunnel.sh "<name>" "<description>"
+~~~
+
+Tunnelの作成・更新・削除に使うAdmin API keyは
+`~/.config/local-mcp/admin-api-key` にあります。
+Runtime keyとは分離し、常駐serviceへは渡しません。
 
 ## XServer MCPだけ接続できない → XServer Tunnelを見る
 
@@ -64,6 +76,25 @@ Platform APIで取得するTunnel metadata自体はOrganization + Workspaceの�
 ローカルruntimeの `CONTROL_PLANE_ORGANIZATION_ID` も引き続き必要です。
 そのため同じエラー時はローカルorganization contextを消さず、
 まずChatGPT側ConnectorのOrganization選択を確認します。
+
+## AliNavigator MCPだけ接続できない → AliNavigator Tunnelを見る
+
+~~~bash
+systemctl --user status local-mcp-alinavigator-tunnel.service
+journalctl --user -u local-mcp-alinavigator-tunnel.service -n 100 --no-pager
+tunnel-client doctor --profile-dir "$HOME/.config/local-mcp/tunnel-profiles" --profile alinavigator-mcp
+~~~
+
+profileは ~/.config/local-mcp/tunnel-profiles/alinavigator-mcp.yaml、Gateway Access資格情報は
+~/.config/local-mcp/alinavigator.env にあります。
+MCP本体とlauncherは alinavigator-api 側で管理します。
+doctorは資格情報のmode、stdio/tools discovery、Gatewayのhealth tool、Tunnel serviceを個別に確認します。
+
+launcherがない場合は alinavigator-api で ./mcp/scripts/install-local.sh を実行し、profileを作り直す場合は次を使います。
+
+~~~bash
+./scripts/configure-alinavigator-tunnel.sh tunnel_...
+~~~
 
 ## DevSpace Localだけ接続できない → DevSpaceとFunnelを見る
 
@@ -125,4 +156,4 @@ Tunnel Clientの設定形式はバージョン依存なので、更新時は公�
 
 このガイドで解決しない場合は、`status.sh` と `doctor.sh` の結果から対象経路を切り分けます。
 
-最終更新: 2026-09-20
+最終更新: 2026-09-25

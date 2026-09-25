@@ -22,6 +22,32 @@ DevSpace用のSecure MCP Tunnel profileやTunnel IDは作りません。
 常駐runtime用のAPI keyはTunnelsのRead + Useだけを許可したRestricted keyにします。
 Manage権限は付けません。
 
+Tunnel管理用には `Local MCP Admin` というAdmin API keyを別途用意し、
+`~/.config/local-mcp/admin-api-key` に通常ファイル・mode 600で保存します。
+Runtime keyとAdmin keyは `local-mcp` 自身が所有するため、同じ `~/.config/local-mcp/` に揃えます。
+サービス固有secretは `~/projects/.secrets/<repo>/` を正本とし、local-mcp側へ必要な場合だけ参照を作ります。
+
+新しいTunnelは既存Orca TunnelのOrganization / Workspace scopeを継承して作成できます。
+
+~~~bash
+./scripts/create-secure-mcp-tunnel.sh \
+  "AliNavigator MCP" \
+  "Routes ChatGPT traffic to the local AliNavigator MCP server"
+~~~
+
+Tunnel管理を自動化する場合は、Platformで `Local MCP Admin` というAdmin API keyを別途作成し、
+`~/.config/local-mcp/admin-api-key` に直接保存します。
+Runtime keyと同様、symlinkではなく通常ファイルとしてmode 600で管理します。
+このAdmin keyはsystemdや長寿命runtimeへ渡さず、Tunnel CRUD時だけ利用します。
+
+~~~bash
+read -rsp "Local MCP Admin API key: " LOCAL_MCP_ADMIN_KEY
+printf '\n'
+printf '%s' "$LOCAL_MCP_ADMIN_KEY" > "$HOME/.config/local-mcp/admin-api-key"
+chmod 600 "$HOME/.config/local-mcp/admin-api-key"
+unset LOCAL_MCP_ADMIN_KEY
+~~~
+
 ~~~bash
 install -d -m 700 "$HOME/.config/local-mcp"
 
@@ -103,6 +129,36 @@ serviceは `Restart=always` で、user lingerが有効な環境ではOS再起動
 ChatGPT側では新規プラグインの接続方式を「トンネル」にし、作成した `XServer MCP` Tunnelを選択します。
 XServer API keyはread-onlyのまま使います。
 
+## AliNavigator MCPをChatGPTへ接続する
+
+MCP本体は alinavigator-api リポジトリで管理します。先に同リポジトリで次を実行し、launcherを作ります。
+
+~~~bash
+./mcp/scripts/install-local.sh
+~~~
+
+Gateway AccessのService Tokenは次の2変数として ~/.config/local-mcp/alinavigator.env に保存し、mode 600にします。実値はこのリポジトリへ保存しません。
+configure / install / doctorでも所有者とmode 600を検査します。
+
+~~~text
+ALINAVIGATOR_ACCESS_CLIENT_ID=...
+ALINAVIGATOR_ACCESS_CLIENT_SECRET=...
+~~~
+
+OpenAI Platformで AliNavigator MCP 用Tunnelを作り、
+Orca MCPと同じOrganization / ChatGPT Workspaceへ関連付けます。
+Tunnel IDを取得したら次を実行します。
+
+~~~bash
+./scripts/configure-alinavigator-tunnel.sh tunnel_...
+~~~
+
+このスクリプトはprofileを alinavigator-mcp として生成し、
+local-mcp-alinavigator-tunnel.service を有効化します。
+MCP commandには ~/.local/bin/alinavigator-mcp を使うため、
+local-mcp側は alinavigator-api のcheckoutパスを保持しません。
+設定前に ~/.local/bin/alinavigator-mcp-probe でstdio接続とtools/listも確認します。
+
 ## 秘密値を出さずに診断する
 
 ~~~bash
@@ -120,4 +176,4 @@ API key、OAuth token、Owner passwordはChatGPTへ貼り付けません。
 - OpenAI tunnel-client: <https://github.com/openai/tunnel-client>
 - DevSpace configuration: <https://github.com/Waishnav/devspace/blob/main/docs/configuration.md>
 
-最終更新: 2026-09-20
+最終更新: 2026-09-25
