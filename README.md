@@ -55,6 +55,11 @@ Orca用のCodexify Skillは次でuser-global skillへリンクします。
 軽い変更はCodexify native toolsで直接処理します。
 長時間・並列・別worktreeのagent作業だけOrca Orchestrationへ渡します。
 
+supervised workerはCodexを既定にします。Orca 1.4.212 + OpenCode 2.0.18では、
+prompt inputは受理されてもturn開始・agent statusの観測が取れず、
+Dispatchが `input_accepted` のまま残るケースを実機確認しています。
+OpenCodeはdirect terminal / handoff用途では利用できますが、完了判定が必要なsupervised workerではCodexを優先します。
+
 Orcaの契約は更新が速いため、実行前にインストール済みバージョンのbundled skillを確認します。
 
 ~~~bash
@@ -88,5 +93,9 @@ AliNavigatorのGateway Access資格情報は ~/.config/local-mcp/alinavigator.en
 Tunnel管理用のAdmin API keyは `~/.config/local-mcp/admin-api-key` に置き、
 Runtime API keyと同様に現在のユーザー所有・mode 600で管理します。
 Admin keyは常駐serviceへ渡さず、Tunnel CRUD時だけ使用します。
+
+## License
+
+[MIT](LICENSE)
 
 最終更新: 2026-09-27

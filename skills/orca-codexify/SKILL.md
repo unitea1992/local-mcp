@@ -40,6 +40,11 @@ the documented `--retry-request` flow only when it is the exact same operation.
 
 ## Supervised worker flow
 
+Prefer Codex for supervised workers that require reliable lifecycle settlement. With Orca 1.4.212 and
+OpenCode 2.0.18, prompt input can be accepted while turn-start and agent-status observation remain unsupported,
+leaving the Dispatch at `input_accepted`. Use OpenCode for direct terminal work or handoff when appropriate, but
+do not depend on it for supervised completion until the installed Orca/OpenCode contract proves status support.
+
 For an existing workspace:
 
 1. Resolve the exact Orca worktree with `orca-ide worktree list --json`.
