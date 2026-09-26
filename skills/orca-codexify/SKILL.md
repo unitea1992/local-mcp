@@ -40,10 +40,46 @@ the documented `--retry-request` flow only when it is the exact same operation.
 
 ## Supervised worker flow
 
-Prefer Codex for supervised workers that require reliable lifecycle settlement. With Orca 1.4.212 and
-OpenCode 2.0.18, prompt input can be accepted while turn-start and agent-status observation remain unsupported,
-leaving the Dispatch at `input_accepted`. Use OpenCode for direct terminal work or handoff when appropriate, but
-do not depend on it for supervised completion until the installed Orca/OpenCode contract proves status support.
+Prefer an agent whose supervised lifecycle has been acceptance-tested on the installed Orca version.
+
+Current verified matrix:
+
+- Codex: supervised lifecycle verified through `worker_done` and `succeeded/completed`.
+- OMP: supervised lifecycle verified through `worker_done` and `succeeded/completed`. Its initial start receipt
+  can report turn-start observation as unsupported, but Orca subsequently provides OMP transcript/status and
+  settles the Dispatch correctly.
+- OpenCode 2.0.18: prompt input can be accepted while turn-start and agent-status observation remain unsupported,
+  leaving the Dispatch at `input_accepted`. Use it for direct terminal work or handoff unless a fresh acceptance
+  test proves reliable lifecycle settlement.
+- Claude Code: Orca 1.4.212 advertises native `claude` worker support, including provider model selection. Treat it
+  as native-but-unverified until Claude Code is installed and the acceptance test below passes.
+- Hermes Agent: not advertised as a native Orca agent in Orca 1.4.212. Treat it as custom-terminal/unverified until
+  installed.
+
+Do not hard-code the list as a permanent compatibility contract. Re-read the installed Orca skill/help before use.
+
+## New agent compatibility gate
+
+When a new CLI agent is installed, classify it without changing Local Dev Hub code:
+
+1. Confirm the executable is available.
+2. Re-read `orca-ide skills get orca-cli`, `orca-ide skills get orchestration`, and
+   `orca-ide orchestration worker-start --help`.
+3. If Orca advertises the agent ID, run one read-only supervised acceptance task with `worker-start --agent <id>`.
+4. Require positive evidence of task execution and an accepted `worker_done` that settles the Dispatch.
+5. Confirm `worker-read --source auto` can retrieve useful output and cleanup/release behaves correctly.
+6. Only then mark the agent as a preferred supervised worker.
+
+If Orca does not advertise the agent:
+
+1. Start it with `terminal create --command "<agent command>"` and wait for TUI readiness when applicable.
+2. If Orca recognizes the terminal as an agent, `worker-start --terminal <handle>` may be used to give the existing
+   terminal supervised lifecycle ownership.
+3. If supervised ownership is unavailable, the low-level
+   `orchestration dispatch --inject` path may inject a Task into an operator-created terminal, but that lane is
+   explicitly unsupervised: Orca does not own or stop the process and release performs no process cleanup.
+4. Otherwise use the agent only as a direct terminal/handoff target. Never claim durable completion tracking for an
+   unverified custom agent.
 
 For an existing workspace:
 
