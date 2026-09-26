@@ -53,8 +53,9 @@ Current verified matrix:
   test proves reliable lifecycle settlement.
 - Claude Code: Orca 1.4.212 advertises native `claude` worker support, including provider model selection. Treat it
   as native-but-unverified until Claude Code is installed and the acceptance test below passes.
-- Hermes Agent: not advertised as a native Orca agent in Orca 1.4.212. Treat it as custom-terminal/unverified until
-  installed.
+- Hermes Agent: Orca upstream advertises native `hermes` support and includes Hermes-specific startup, hooks,
+  session-history, skill mapping, and automation handling. Treat it as native-but-unverified until installed and
+  the acceptance test below passes.
 
 Do not hard-code the list as a permanent compatibility contract. Re-read the installed Orca skill/help before use.
 

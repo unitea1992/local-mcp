@@ -61,13 +61,17 @@ supervised workerはCodexまたはOMPを既定にします。Orca 1.4.212では�
 OpenCode 2.0.18では、
 prompt inputは受理されてもturn開始・agent statusの観測が取れず、
 Dispatchが `input_accepted` のまま残るケースを実機確認しています。
-OpenCodeはdirect terminal / handoff用途では利用できますが、完了判定が必要なsupervised workerではCodexを優先します。
+OpenCodeはdirect terminal / handoff用途では利用できますが、完了判定が必要なsupervised workerではCodex / OMPを優先します。
 
 agent固有のadapterはlocal-mcpへ追加しません。新しいagentはOrcaの現在の契約に応じて、
 native supervised、既存terminal supervised、unsupervised terminalの順に利用可能性を判定します。
 Claude CodeはOrca 1.4.212がnative agent `claude` として明示対応しています。
-Hermes Agentは現時点のOrca native agent一覧には含まれないため、導入後にterminal経由の互換性を検証します。
+Hermes AgentもOrca本体のagent catalog / TUI agent selectionでnative `hermes` として対応しています。
+どちらも未導入なので、導入後にread-only acceptance testを1回通してsupervised lifecycleを確認します。
 現在の実測matrixと追加手順は [Agent互換性](docs/agent-compatibility.md) にまとめています。
+
+DevSpaceからの機能移行状況とCodexify設定の理由は
+[Local Dev Hubの機能と設定](docs/local-dev-hub-capabilities.md) にまとめています。
 
 Orcaの契約は更新が速いため、実行前にインストール済みバージョンのbundled skillを確認します。
 

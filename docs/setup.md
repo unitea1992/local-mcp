@@ -21,12 +21,14 @@ Codexify自身にはworktreeを作らせず、worktreeはOrcaへ一本化しま�
   "workDir": "/absolute/path/to/projects",
   "multiProject": true,
   "worktrees": { "mode": "never" },
-  "codexMcp": { "enabled": true, "useCli": false }
+  "codexMcp": { "enabled": true, "useCli": true },
+  "experimental": { "claudeSkills": true }
 }
 ~~~
 
 `codexMcp.enabled=true` ではCodex user configのMCPを読み込みます。
-`useCli=false` はCodex CLI経由の追加探索を行わず、`config.toml` の明示設定だけを取り込む構成です。
+`useCli=true` ではCodex CLIのeffective catalogueも取り込み、plugin由来MCPもcatalog modeへ集約します。
+`experimental.claudeSkills=true` は将来Claude Codeを導入した際にClaude-owned skill rootsも発見できるようにします。
 
 ## 2. OpenAI Secure MCP Tunnelを設定する
 

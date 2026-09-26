@@ -13,7 +13,7 @@ The table records observed behavior, not a permanent vendor guarantee.
 | OMP | Yes | Yes | Passed | Supervised worker / handoff |
 | OpenCode 2.0.18 | Yes | Yes | Incomplete lifecycle observation | Direct terminal / handoff |
 | Claude Code | No | Yes | Not tested | Test after installation; expected first-class |
-| Hermes Agent | No | Not advertised | Not tested | Test custom-terminal path after installation |
+| Hermes Agent | No | Yes | Not tested | Test after installation; expected first-class |
 
 OMP's initial worker-start receipt can report turn-start observation as unsupported. This does not by itself make
 the worker unusable: in the 2026-09-27 acceptance test Orca subsequently exposed the OMP transcript and agent status,
@@ -21,6 +21,9 @@ received `worker_done`, and settled the Dispatch as succeeded/completed.
 
 OpenCode behaved differently in the same environment: input was accepted, but the Dispatch stayed at
 `input_accepted` with missing agent status until the test worker was explicitly stopped.
+
+Orca upstream also has Hermes-specific startup, status-hook, session-history, skill mapping, and automation handling.
+Treat Hermes as a native Orca integration rather than a generic custom terminal.
 
 ## Adding an agent later
 
