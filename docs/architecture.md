@@ -1,116 +1,88 @@
-# DevSpaceは直接接続、stdio MCPはSecure MCP Tunnelを使う
+# Codexifyを開発Hub、Orcaを実行backendにする
 
-## 接続方式は同じ形へ無理に統一しない
+## 正規経路
 
-local-mcpでは、管理対象のMCPへ同じ接続方式を強制しません。
-それぞれの既存設計に合う、最も少ない部品で運用できる経路を使います。
+開発用途はChatGPTからCodexify 1本へ接続します。
 
 ~~~text
 ChatGPT
   │
-  ├─ DevSpace Local
-  │      │
-  │      ▼
-  │   Tailscale Funnel
-  │      │
-  │      ▼
-  │   DevSpace OAuth
-  │      │
-  │      ▼
-  │   127.0.0.1:7676
-  │
-  └─ Orca MCP
-         │
-         ▼
-     OpenAI Secure MCP Tunnel
-         │
-         ▼
-      tunnel-client
-         │ stdio
-         ▼
-       orca-mcp
-         │
-         ▼
-        Orca
-     /    |     \
-   OMP OpenCode Codex
+  ▼
+OpenAI Secure MCP Tunnel
+  ▼
+Codexify
+  ├─ native file / edit / git / exec / memory
+  ├─ MCP catalog
+  │    ├─ node_repl
+  │    └─ XServer
+  └─ exec_command
+       ▼
+     Orca CLI
+       ▼
+  Run / Task / Dispatch / Worker
 ~~~
 
-## DevSpaceは既存のOAuth境界をそのまま使う
+Codexifyは `openai/session` を使って同じChatのproject bindingを永続化します。
+MCP transportやCodexify processが入れ替わっても同じChatから復元できます。
 
-DevSpaceはHTTP MCPとしてOAuthを内蔵し、Owner passwordによる認可、Bearer token、resource検証を持っています。
-ローカルサーバーは `127.0.0.1:7676` にbindし、外部からはTailscale Funnel経由で接続します。
+新しいChatではconversation binding自体は引き継がず、exact `resumePath` で同じworkspaceを再bindします。
+planとnotesはactive root単位のmemoryから `recall` します。
 
-Secure MCP Tunnel経由でも動作することは確認しました。
-ただし、その場合はDevSpace OAuthに加えてTunnel側のOAuth discovery、Harpoon、resource alias管理が必要になります。
-個人利用では公開経路を1段減らす利点より、設定・障害点・バージョン依存が増える影響を大きく見て採用しませんでした。
+## worktreeはOrcaだけが管理する
 
-DevSpaceの接続方式を再検討する条件は [DevSpaceの接続方式](devspace-auth.md) にまとめています。
+Codexifyはmulti-project modeかつ `worktreeMode=never` で使います。
+通常の軽い作業はsource checkoutを直接編集し、並列・長時間作業だけOrcaでworktreeを作ります。
 
-## OrcaはSecure MCP Tunnelとの相性がよい
+これによりCodexify worktreeとOrca worktreeの二重管理を避けます。
 
-orca-mcpはstdio MCPで、外部向けHTTP listenerを持ちません。
-`tunnel-client` がOpenAIへ外向きHTTPS接続を張り、受け取ったMCP要求をローカルのorca-mcpへ渡します。
+## OrcaはCLI契約をそのまま使う
 
-このためOrca用に公開URL、OAuthサーバー、reverse proxyを追加する必要がありません。
-Secure MCP Tunnelを使う価値がDevSpaceより明確です。
+自作Orca MCPは置きません。Orca 1.4系はprompt delivery request ID、worktree create idempotency、
+supervised worker、restart recoveryなどを本体側で持つため、local-mcpで状態機械を重複実装しません。
 
-常駐runtimeにはTunnelsのRead + Useだけを持つRestricted keyを渡します。
-Tunnelの作成・更新に必要なManage権限は常駐プロセスへ渡しません。
+基本フローは次です。
 
-## XServer MCPもSecure MCP Tunnelへ直接つなぐ
+1. 必要なら `orca worktree create --json` でworktreeを作る
+2. exact `path:` selectorでcoordinator terminalを作る
+3. `orchestration run-create --from <handle>`
+4. `worker-start --run <run> --from <handle> --worktree path:...`
+5. `worker-show` / `worker-read` で監督する
+6. settled後に `worker-release`
+7. coordinator terminalを閉じ、不要なworktreeだけ `worktree rm`
 
-XServer公式MCPはstdioで動作するため、自作のHTTPラッパーやOAuthサーバーを追加しません。
-Orcaとは別Tunnel / 別profileにし、長寿命runtime用のRestricted API keyだけ共有します。
-XServer API keyはread-onlyで、サーバー設定・負荷・ログ・ドメイン情報の参照に限定します。
+OrcaのCLI仕様は変化が速いため、固定したwrapperより `orca-ide skills get orchestration` を正本にします。
 
-XServer Tunnelは `local-mcp-xserver-tunnel.service` で常駐させます。
-Orca Tunnelと同じく `Restart=always` とuser lingerでOS再起動後も復帰します。
+## 長時間処理はMCP callから分離する
 
-## AliNavigator MCPもサービス側実装とTunnel運用を分離する
+ChatGPTの1ターン寿命はローカルMCPから保証できません。
+そのため、長いcommandはCodexifyの `exec_command` で短くyieldし、返されたsession handleを
+`write_stdin` でpollします。同じChatならMCP transportをまたいでもcommand sessionを継続できます。
 
-AliNavigator固有のMCP toolsとGateway clientは alinavigator-api リポジトリで管理します。
-local-mcp はその実装を所有せず、~/.local/bin/alinavigator-mcp launcherをSecure MCP Tunnelから起動するprofile、systemd、診断だけを管理します。
+長い作業はフェーズ境界で `update_plan` と必要な `remember` を更新します。
+次フェーズも長い場合は無理に1ターンを維持せず、進捗を一度ユーザーへ返してから続行します。
 
-これによりGatewayの公開契約変更とMCP tool変更を同じリポジトリで確認でき、Tunnel方式を将来変更してもAliNavigatorのMCP本体を移動せずに済みます。
-Gateway Access Service Tokenは ~/.config/local-mcp/alinavigator.env から子プロセスへ渡し、tool引数やprofileへ埋め込みません。
+## MCP catalog
 
-## Orca Tunnelはsystemd user serviceで常駐する
+CodexifyはCodex user configのstdio / Streamable HTTP MCPをclientとして取り込みます。
+自動取込はcatalog modeを使い、upstreamの大量toolをChatGPTのtool catalogueへ直接展開しません。
 
-Orca Tunnelは `local-mcp-orca-tunnel.service` で管理します。
-profileは `tunnel-client init` で生成し、tmux常駐runtimeを作る `runtimes connect` は使いません。
+現在は `node_repl` と `xserver` を取り込みます。
+XServerを別Secure MCP Tunnelで公開する必要はありません。
 
-systemdからNVMを読み込んだ後に `tunnel-client run --profile orca-mcp` を起動します。
-これによりPC再起動後も自動復旧し、Node.jsの実行環境も普段のNVM設定へ揃えます。
+## AliNavigatorだけ独立Connectorを残す
 
-## Orca MCPは既存セッションの引き継ぎを優先する
+AliNavigatorは商品検索・比較という別用途のため、開発Hubへ混ぜません。
+MCP本体はalinavigator-apiで管理し、このリポジトリはSecure MCP Tunnel profile、systemd、診断だけを管理します。
 
-terminalの一覧、状態、出力本文は既存セッションも含めて読めます。
-既存terminalへ入力するときだけ `orca_attach_terminal` で書き込み対象として明示します。
-
-attach対象は、Orcaが `agentIdentity` でOMP / OpenCode / Codexと認識しているterminalです。
-誤ってattachした場合は `orca_detach_terminal` で書き込み対象から外せます。
-既存terminalの終了は許可せず、orca-mcp自身が起動したterminalだけ閉じられます。
-
-新しいagentはOrcaの `worktree create --agent` を使い、新しいworktreeとまとめて起動します。
-既存worktreeへ文字列コマンドでagentを生やしません。
-
-## 個人利用を前提にする
-
-Orca用Tunnelは個人のChatGPT Workspaceへ紐付けます。
-orca-mcp単体では利用者ごとのterminal所有権を分離していないため、同じTunnelを複数ユーザーへ共有しません。
-
-DevSpaceもOwner passwordとOAuth tokenを秘密情報として扱います。
-Funnel URL自体は秘密情報として扱わず、OAuthが認証境界です。
+新しいAliNavigator Tunnelを作る場合はCodexify TunnelのOrganization / Workspace scopeを継承します。
 
 ## 外部依存はforkしない
 
 | 依存 | 扱い |
 | --- | --- |
 | openai/tunnel-client | 公式配布物を使用 |
-| DevSpace | 公式パッケージと既存OAuthを使用 |
-| Tailscale Funnel | DevSpaceの公開経路として使用 |
+| Codexify | 公式release binaryを使用 |
 | Orca | 導入済みアプリと `orca-ide` CLIを使用 |
-| OMP / OpenCode / Codex | Orcaから起動・再開 |
+| OpenCode / Codex等 | Orcaから起動・監督 |
 
 バージョン依存の設定はCLIの `--help` と公式文書を正本にします。

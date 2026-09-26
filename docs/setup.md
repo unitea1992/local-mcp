@@ -1,179 +1,110 @@
-# 初回セットアップはDevSpaceとOrcaを別々に考える
+# 初回セットアップはCodexifyを中心にする
 
-この章は初回セットアップや再構築時に使います。
-普段の確認は [運用ガイド](operations.md) を参照してください。
+この章は初回セットアップや再構築時に使います。普段の確認は [運用ガイド](operations.md) を参照してください。
 
-2026-09-20時点の確認済み構成は、DevSpace 1.1.0-beta.4、Orca 1.4.205、
-tunnel-client 0.0.14、Node.js 24.20.0、pnpm 11.25.0です。
+## 1. Codexifyを導入する
 
-## DevSpaceは既存のFunnel + OAuthを使う
-
-DevSpaceは `127.0.0.1:7676` で起動し、`server.publicBaseUrl` にTailscale FunnelのHTTPS originを設定します。
-ChatGPT側では `DevSpace Local` として接続し、DevSpaceのOAuth認可を完了します。
-
-DevSpace用のSecure MCP Tunnel profileやTunnel IDは作りません。
-過去に作成したDevSpace用Tunnelは [DevSpaceの接続方式](devspace-auth.md) の検証履歴として扱い、運用には使いません。
-
-## Orca用TunnelをOpenAI Platformで作る
-
-表示名は `Orca MCP`、ローカルのprofile名は `orca-mcp` にします。
-個人で使うChatGPT Workspaceへ関連付けます。
-
-常駐runtime用のAPI keyはTunnelsのRead + Useだけを許可したRestricted keyにします。
-Manage権限は付けません。
-
-Tunnel管理用には `Local MCP Admin` というAdmin API keyを別途用意し、
-`~/.config/local-mcp/admin-api-key` に通常ファイル・mode 600で保存します。
-Runtime keyとAdmin keyは `local-mcp` 自身が所有するため、同じ `~/.config/local-mcp/` に揃えます。
-サービス固有secretは `~/projects/.secrets/<repo>/` を正本とし、local-mcp側へ必要な場合だけ参照を作ります。
-
-新しいTunnelは既存Orca TunnelのOrganization / Workspace scopeを継承して作成できます。
+公式release binaryを使います。
 
 ~~~bash
-./scripts/create-secure-mcp-tunnel.sh \
-  "AliNavigator MCP" \
-  "ChatGPTからAliNavigator APIを利用し、AliExpressとAmazon.co.jpの商品情報を取得するためのローカルMCP"
+curl -qfsSL https://codexify.dev/install.sh | sh
+codexify quickstart
 ~~~
 
-Tunnel管理を自動化する場合は、Platformで `Local MCP Admin` というAdmin API keyを別途作成し、
-`~/.config/local-mcp/admin-api-key` に直接保存します。
-Runtime keyと同様、symlinkではなく通常ファイルとしてmode 600で管理します。
-このAdmin keyはsystemdや長寿命runtimeへ渡さず、Tunnel CRUD時だけ利用します。
+個人開発環境ではmulti-project modeを選び、普段のプロジェクト群を含むrootを指定します。
+Codexify自身にはworktreeを作らせず、worktreeはOrcaへ一本化します。
+
+設定の要点は次です。
+
+~~~json
+{
+  "workDir": "/absolute/path/to/projects",
+  "multiProject": true,
+  "worktrees": { "mode": "never" },
+  "codexMcp": { "enabled": true, "useCli": false }
+}
+~~~
+
+`codexMcp.enabled=true` ではCodex user configのMCPを読み込みます。
+`useCli=false` はCodex CLI経由の追加探索を行わず、`config.toml` の明示設定だけを取り込む構成です。
+
+## 2. OpenAI Secure MCP Tunnelを設定する
+
+`codexify quickstart` の案内に従い、開発Hub用TunnelとTunnels Read + Useだけを持つruntime keyを設定します。
+runtime keyはGitへ保存せず、`file:` または `env:` 参照を使います。
+
+既存のTunnelを移行する場合も、Tunnel IDとruntime keyの参照先だけをCodexify設定へ渡します。
+keyの実値を別ファイルへ複製する必要はありません。
+
+設定後はbackground serviceを有効化します。
 
 ~~~bash
-read -rsp "Local MCP Admin API key: " LOCAL_MCP_ADMIN_KEY
-printf '\n'
-printf '%s' "$LOCAL_MCP_ADMIN_KEY" > "$HOME/.config/local-mcp/admin-api-key"
-chmod 600 "$HOME/.config/local-mcp/admin-api-key"
-unset LOCAL_MCP_ADMIN_KEY
+codexify service install
+codexify service status
+codexify doctor
 ~~~
+
+起動直後はupstream MCPとTunnelの初期化に数秒かかることがあります。
+`doctor` のhealthだけが一時的に失敗する場合はservice logを確認し、`OpenAI Secure MCP Tunnel: ready` 後に再実行します。
+
+## 3. Orca連携Skillを有効化する
 
 ~~~bash
-install -d -m 700 "$HOME/.config/local-mcp"
-
-read -rsp "Runtime API key: " LOCAL_MCP_RUNTIME_KEY
-printf '\n'
-printf '%s' "$LOCAL_MCP_RUNTIME_KEY" > "$HOME/.config/local-mcp/runtime-api-key"
-chmod 600 "$HOME/.config/local-mcp/runtime-api-key"
-unset LOCAL_MCP_RUNTIME_KEY
+./scripts/install-orca-codexify-skill.sh
 ~~~
 
-## Orca MCP profileを作る
+Orcaは独自MCPを挟まず、Codexifyの `exec_command` から `orca-ide` を呼びます。
+実行前にインストール済みOrcaのbundled skillを正本として確認します。
 
 ~~~bash
-pnpm install
-pnpm build
-
-export ORCA_TUNNEL_ID='tunnel_...'
-export LOCAL_MCP_PROFILE_DIR="$HOME/.config/local-mcp/tunnel-profiles"
-LOCAL_MCP_ROOT="$(git rev-parse --show-toplevel)"
-
-tunnel-client init \
-  --profile orca-mcp \
-  --profile-dir "$LOCAL_MCP_PROFILE_DIR" \
-  --tunnel-id "$ORCA_TUNNEL_ID" \
-  --control-plane-api-key-ref "file:$HOME/.config/local-mcp/runtime-api-key" \
-  --mcp-command "node $LOCAL_MCP_ROOT/apps/orca-mcp/dist/index.js" \
-  --health-listen-addr 127.0.0.1:0
+orca-ide skills get orca-cli
+orca-ide skills get orchestration
 ~~~
 
-ここではprofileだけを生成します。
-常駐起動は次のsystemd serviceに任せるため、`runtimes connect` は使いません。
+通常の軽い編集はCodexify native toolsで行い、別worktree・長時間・並列agentが必要な場合だけOrcaへ渡します。
 
-## Orca Tunnelをsystemdで常駐化する
+## 4. MCP catalogを確認する
 
-~~~bash
-./scripts/install-orca-tunnel-service.sh
-~~~
+Codexify起動時に、取り込んだMCPがcatalogとして表示されることを確認します。
+大きなupstreamでもChatGPT側へ全tool schemaを直接公開せず、固定の探索・実行toolから必要なtoolだけ選べます。
 
-このスクリプトは旧tmux runtimeを停止し、
-`~/.config/systemd/user/local-mcp-orca-tunnel.service` をインストールして有効化します。
-同時にTunnel metadataからorganization IDを取得し、
-`~/.config/local-mcp/tunnel.env` へ `CONTROL_PLANE_ORGANIZATION_ID` として保存します。
-この値はGitへ入れず、systemd serviceだけが読み込みます。
+この環境ではXServerを開発Hub側へ集約するため、XServer専用Secure MCP Tunnelは不要です。
 
-`tunnel-client 0.0.14` では、organizationへ関連付けたTunnelを長寿命runtimeから使う場合、
-organization contextを明示しておくと認可エラーを切り分けやすくなります。
-既知のTunnel IDに対するmetadata取得には、同じRestricted runtime keyを使います。
+## 5. AliNavigatorは専用Connectorを維持する
 
-確認は次で行います。
-
-~~~bash
-systemctl --user status local-mcp-orca-tunnel.service
-./scripts/status.sh
-./scripts/doctor.sh
-~~~
-
-ChatGPT側では `Orca MCP` Connectorからworktree一覧を取得できれば完了です。
-
-## XServer MCPをChatGPTへ接続する
-
-OpenAI Platformで `XServer MCP` という別Tunnelを作り、Orca MCPと同じOrganization / ChatGPT Workspaceへ関連付けます。
-常駐runtime用API keyは新規発行せず、既存の `~/.config/local-mcp/runtime-api-key` を共有します。
-XServer側の認証は `~/.local/bin/xserver-mcp-official` が既存の暗号化credentialから読み込みます。
-
-Tunnel IDを取得したら次を実行します。
-
-~~~bash
-./scripts/configure-xserver-tunnel.sh tunnel_...
-~~~
-
-このスクリプトは次をまとめて行います。
-
-1. Tunnelが既存Orca Tunnelと同じOrganization / Workspaceに属することを確認する
-2. `xserver-mcp` profileを生成する
-3. `local-mcp-xserver-tunnel.service` を有効化して起動する
-
-serviceは `Restart=always` で、user lingerが有効な環境ではOS再起動後も自動復帰します。
-
-ChatGPT側では新規プラグインの接続方式を「トンネル」にし、作成した `XServer MCP` Tunnelを選択します。
-XServer API keyはread-onlyのまま使います。
-
-## AliNavigator MCPをChatGPTへ接続する
-
-MCP本体は alinavigator-api リポジトリで管理します。先に同リポジトリで次を実行し、launcherを作ります。
+AliNavigatorは開発用Hubとは用途が異なるため、独立したSecure MCP Tunnelを維持します。
+MCP本体はalinavigator-api側で管理し、先に同リポジトリでlauncherを用意します。
 
 ~~~bash
 ./mcp/scripts/install-local.sh
 ~~~
 
-Gateway AccessのService Tokenは次の2変数として ~/.config/local-mcp/alinavigator.env に保存し、mode 600にします。実値はこのリポジトリへ保存しません。
-configure / install / doctorでも所有者とmode 600を検査します。
+Gateway Access資格情報は `~/.config/local-mcp/alinavigator.env` にmode 600で保存します。
 
 ~~~text
 ALINAVIGATOR_ACCESS_CLIENT_ID=...
 ALINAVIGATOR_ACCESS_CLIENT_SECRET=...
 ~~~
 
-OpenAI Platformで AliNavigator MCP 用Tunnelを作り、
-Orca MCPと同じOrganization / ChatGPT Workspaceへ関連付けます。
-Tunnel IDを取得したら次を実行します。
+新しいTunnelはCodexifyの開発Hub Tunnelと同じOrganization / Workspace scopeで作成します。
 
 ~~~bash
+./scripts/create-secure-mcp-tunnel.sh \
+  "AliNavigator MCP" \
+  "ChatGPTからAliNavigator APIを利用し、AliExpressとAmazon.co.jpの商品情報を取得するためのローカルMCP"
+
 ./scripts/configure-alinavigator-tunnel.sh tunnel_...
 ~~~
 
-このスクリプトはprofileを alinavigator-mcp として生成し、
-local-mcp-alinavigator-tunnel.service を有効化します。
-MCP commandには ~/.local/bin/alinavigator-mcp を使うため、
-local-mcp側は alinavigator-api のcheckoutパスを保持しません。
-設定前に ~/.local/bin/alinavigator-mcp-probe でstdio接続とtools/listも確認します。
-
-## 秘密値を出さずに診断する
+## 6. 確認する
 
 ~~~bash
+./scripts/check.sh
 ./scripts/status.sh
 ./scripts/doctor.sh
-journalctl --user -u local-mcp-orca-tunnel.service -n 100 --no-pager
 ~~~
 
-API key、OAuth token、Owner passwordはChatGPTへ貼り付けません。
-設定確認が必要な場合も秘密値そのものではなく、権限・パス・HTTP statusを確認します。
+ChatGPT側では開発用Connectorのtool一覧をRefreshし、新しいChatでCodexifyのtoolが見えることを確認します。
+古いChatは読み込んだtool schemaを保持するため、切替確認には新しいChatを使います。
 
-## 参考にする正本
-
-- OpenAI Secure MCP Tunnel: <https://developers.openai.com/api/docs/guides/secure-mcp-tunnels>
-- OpenAI tunnel-client: <https://github.com/openai/tunnel-client>
-- DevSpace configuration: <https://github.com/Waishnav/devspace/blob/main/docs/configuration.md>
-
-最終更新: 2026-09-25
+最終更新: 2026-09-27

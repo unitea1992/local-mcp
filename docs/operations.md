@@ -1,85 +1,73 @@
-# 普段はstatus、異常時だけ個別経路を見る
+# 日常運用はCodexifyを中心に見る
 
-このガイドは日常運用の逆引き用です。
-構成全体を確認したい場合は [設計](architecture.md) を参照してください。
-
-## 今の状態を確認したい → status.sh
+## 状態確認
 
 ~~~bash
 ./scripts/status.sh
 ~~~
 
-DevSpace、Orca、tunnel-client、Orca / XServer Tunnel service、Tailscale Funnelの状態をまとめて確認します。
-秘密情報の値は表示しません。
+Codexify service、Orca CLI、AliNavigator Tunnelの状態をまとめて確認します。
 
-## 何か動かない → doctor.sh
+詳しい診断は次です。
 
 ~~~bash
 ./scripts/doctor.sh
 ~~~
 
-DevSpaceの診断、Orca CLI、Secure MCP Tunnel profiles、Orca / XServer Tunnel serviceを確認します。
-
-## Orca MCPだけ接続できない → systemdログを見る
+## Codexifyが接続できない
 
 ~~~bash
-systemctl --user status local-mcp-orca-tunnel.service
-journalctl --user -u local-mcp-orca-tunnel.service -n 100 --no-pager
+codexify service status
+codexify service logs
+codexify doctor
+curl -fsS http://127.0.0.1:3137/health
 ~~~
 
-serviceを入れ直す場合は次を実行します。
+起動直後はMCP aggregationとSecure MCP Tunnelの準備中でhealthが一時的に503になる場合があります。
+service logでTunnel readyまで進んでいるか確認してから再診断します。
+
+## ChatGPT側で古いtoolが見える
+
+Connectorのtool一覧は既存Chatへ即時反映されません。
+ChatGPT Settingsで開発用ConnectorをRefreshし、新しいChatを開始します。
+
+同じChatのMCP transport再接続やCodexify再起動ではproject bindingが復元されます。
+新しいChatへ移る場合はPrepare handoffでexact `resumePath` を引き継ぎ、workspace選択後に `recall` します。
+
+## 長時間commandを扱う
+
+Codexifyの `exec_command` は長い処理をsessionへyieldできます。
+session IDが返ったら同じ処理を起動し直さず、`write_stdin` でpollします。
+
+ChatGPTの1ターン寿命そのものは保証できないため、長い作業ではフェーズ境界でplanと必要なnoteを保存します。
+次フェーズも長い場合は一度進捗をユーザーへ返し、次ターンから続行します。
+
+## Orcaで長時間agentを動かす
+
+まず現在の契約を確認します。
 
 ~~~bash
-./scripts/install-orca-tunnel-service.sh
+orca-ide skills get orca-cli
+orca-ide skills get orchestration
 ~~~
 
-profileは `~/.config/local-mcp/tunnel-profiles/orca-mcp.yaml`、
-Runtime API keyは `~/.config/local-mcp/runtime-api-key` にあります。
-organization contextは `~/.config/local-mcp/tunnel.env` にあります。
-Tunnel管理用Admin API keyは `~/.config/local-mcp/admin-api-key` にあります。
+基本は専用coordinator terminalとRunを作り、supervised workerを起動します。
 
-新しいTunnelを作る場合は、Organization / Workspace IDを手入力せず、
-既存Orca profileからscopeを継承する共通スクリプトを使います。
-
-~~~bash
-./scripts/create-secure-mcp-tunnel.sh "<name>" "<description>"
+~~~text
+exact worktree
+  → coordinator terminal
+  → Run
+  → Task / Dispatch / Worker
+  → worker-show / worker-read
+  → worker-release
 ~~~
 
-`description` はChatGPT / Platform上でそのまま表示されるため、日本語で記述します。
+新規worktreeが必要なら `orca-ide worktree create` を先に実行し、返されたexact pathを使います。
+作成結果が不明な時は同じ名前で別worktreeを作らず、まず `worktree list` とOrchestration stateを確認します。
 
-Tunnelの作成・更新・削除に使うAdmin API keyは
-`~/.config/local-mcp/admin-api-key` にあります。
-Runtime keyとは分離し、常駐serviceへは渡しません。
+Orca mutationのresponseが不明な場合は、現在のCLIが返すrequest IDと `--retry-request` の契約に従います。
 
-## XServer MCPだけ接続できない → XServer Tunnelを見る
-
-~~~bash
-systemctl --user status local-mcp-xserver-tunnel.service
-journalctl --user -u local-mcp-xserver-tunnel.service -n 100 --no-pager
-tunnel-client doctor --profile-dir "$HOME/.config/local-mcp/tunnel-profiles" --profile xserver-mcp
-~~~
-
-serviceを入れ直す場合は次を実行します。
-
-~~~bash
-./scripts/install-xserver-tunnel-service.sh
-~~~
-
-profileは `~/.config/local-mcp/tunnel-profiles/xserver-mcp.yaml` です。
-Runtime API keyとorganization contextはOrca Tunnelと共用します。
-
-ChatGPT側で `tunnel_active_organization_required` が出る場合は、
-まず `doctor.sh` でローカルruntimeのorganization contextが設定済みか確認します。
-ローカル側が正常でもChatGPTから同じエラーになる類似事象は、
-2026-09-20時点でopenai/tunnel-clientのIssue #60として報告されています。
-この環境ではChatGPT側のOrca MCP設定からOrganization選択だけを外し、
-Workspace紐付けを残して保存すると実呼び出しが復旧しました。
-Platform APIで取得するTunnel metadata自体はOrganization + Workspaceの両方を保持したままで、
-ローカルruntimeの `CONTROL_PLANE_ORGANIZATION_ID` も引き続き必要です。
-そのため同じエラー時はローカルorganization contextを消さず、
-まずChatGPT側ConnectorのOrganization選択を確認します。
-
-## AliNavigator MCPだけ接続できない → AliNavigator Tunnelを見る
+## AliNavigatorだけ接続できない
 
 ~~~bash
 systemctl --user status local-mcp-alinavigator-tunnel.service
@@ -87,75 +75,36 @@ journalctl --user -u local-mcp-alinavigator-tunnel.service -n 100 --no-pager
 tunnel-client doctor --profile-dir "$HOME/.config/local-mcp/tunnel-profiles" --profile alinavigator-mcp
 ~~~
 
-profileは ~/.config/local-mcp/tunnel-profiles/alinavigator-mcp.yaml、Gateway Access資格情報は
-~/.config/local-mcp/alinavigator.env にあります。
-MCP本体とlauncherは alinavigator-api 側で管理します。
-doctorは資格情報のmode、stdio/tools discovery、Gatewayのhealth tool、Tunnel serviceを個別に確認します。
+Gateway Access資格情報は `~/.config/local-mcp/alinavigator.env`、profileは
+`~/.config/local-mcp/tunnel-profiles/alinavigator-mcp.yaml` にあります。
+MCP launcherとprobeはalinavigator-api側で管理します。
 
-launcherがない場合は alinavigator-api で ./mcp/scripts/install-local.sh を実行し、profileを作り直す場合は次を使います。
+profileを再作成する場合は次を使います。
 
 ~~~bash
 ./scripts/configure-alinavigator-tunnel.sh tunnel_...
 ~~~
 
-## DevSpace Localだけ接続できない → DevSpaceとFunnelを見る
+## Tunnelを追加する
+
+新しい専用TunnelはCodexifyの開発Hub TunnelからOrganization / Workspace scopeを継承します。
 
 ~~~bash
-systemctl --user status devspace.service
-devspace doctor
-tailscale funnel status
+./scripts/create-secure-mcp-tunnel.sh "<name>" "<description>"
 ~~~
 
-DevSpaceはSecure MCP Tunnelを使いません。
-`server.publicBaseUrl`、DevSpace OAuth、Tailscale Funnelの3点を確認します。
-
-過去の `devspace-mcp` Tunnel profileやresource aliasは現在の運用には不要です。
-経緯は [DevSpaceの接続方式](devspace-auth.md) にあります。
-
-## Orcaの途中作業を引き継ぐ
-
-まずworktreeとterminalを確認し、必要なterminalの出力を読みます。
-書き込みが必要な場合だけ `orca_attach_terminal` を実行し、その後 `orca_send_terminal` を使います。
-
-OMP / OpenCode / CodexのようなTUIの現在表示を確認する場合は、
-`orca_read_terminal` に `screen=true` を指定します。
-通常の蓄積ログを追う場合は既定のstream読み取りを使い、cursorで差分を取得します。
-`screen=true` とcursorは同時指定しません。
-
-Secure MCP Tunnelやorca-mcpが再起動してもOrcaのterminalは残ります。
-再起動後は対象terminalを読み直し、必要なら再度attachします。
-
-## 新しいOrca agentを起動する
-
-`orca_create_agent_worktree` を使い、worktreeとOMP / OpenCode / Codexをまとめて作ります。
-既存worktreeに新しいagentが必要な場合はOrca側から起動し、そのterminalをChatGPTからattachします。
-
-Orca 1.4.205 + OpenCode 2.0.11では、Orca生成のOpenCode status pluginが旧契約のため
-`1 plugin failed /plugins` と表示される既知事象があります。
-OpenCode本体の起動、terminal read/send、TUI待機は実機で動作確認済みです。
-生成pluginへ手修正は入れず、Orca upstreamの修正を待ちます。
+別の既存Tunnelをscope正本にする場合だけ第3引数へTunnel IDを指定できます。
 
 ## tunnel-clientを更新する
+
+AliNavigatorのstandalone Tunnelではlocal-mcp管理のtunnel-clientを使います。
 
 ~~~bash
 ./scripts/install-tunnel-client.sh
 ./scripts/check.sh
-systemctl --user restart local-mcp-orca-tunnel.service
+systemctl --user restart local-mcp-alinavigator-tunnel.service
 ~~~
 
-更新後は `status.sh` と `doctor.sh` を実行します。
-Tunnel Clientの設定形式はバージョン依存なので、更新時は公式Docsと `--help` を正本にします。
+Codexifyの開発Hub TunnelはCodexify設定の `clientPath` を使います。
 
-## 用語
-
-| 用語 | このリポジトリでの意味 |
-| --- | --- |
-| DevSpace Local | Tailscale Funnel + DevSpace OAuthで直接接続するMCP |
-| Orca MCP | Secure MCP Tunnel経由で使う自作stdio MCP |
-| Secure MCP Tunnel | Orca MCPへ到達するOpenAIの外向き接続 |
-| tunnel-client | Secure MCP Tunnelを張るOpenAI公式クライアント |
-| orca-mcp | Orca操作をMCP toolsとして公開する変換層 |
-
-このガイドで解決しない場合は、`status.sh` と `doctor.sh` の結果から対象経路を切り分けます。
-
-最終更新: 2026-09-25
+最終更新: 2026-09-27

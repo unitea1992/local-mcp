@@ -1,19 +1,16 @@
-# Secure MCP Tunnelの実profileはOrca用だけ持つ
+# Secure MCP Tunnel profileは専用Connectorだけ持つ
 
-実際に使うprofileは `~/.config/local-mcp/tunnel-profiles/orca-mcp.yaml` です。
-リポジトリの外なのでGit管理されません。
+開発用TunnelはCodexify自身が管理するため、local-mcpのprofileにはしません。
+XServerもCodexifyのMCP catalogへ移したため、専用profileは不要です。
 
-Runtime API keyはprofileへ直書きせず、
-`~/.config/local-mcp/runtime-api-key` を `file:` 参照します。
+現在local-mcpが管理する実profileはAliNavigator用の
+`~/.config/local-mcp/tunnel-profiles/alinavigator-mcp.yaml` だけです。
 
-profileは現在インストールされている `tunnel-client` から生成します。
+Runtime API keyはprofileへ直書きせず、`~/.config/local-mcp/runtime-api-key` を `file:` 参照します。
 
 ~~~bash
 tunnel-client profiles samples list
 tunnel-client help quickstart
 ~~~
 
-表示名は `Orca MCP`、profile名は `orca-mcp` に揃えます。
-日常の常駐管理は `local-mcp-orca-tunnel.service` が担当します。
-
-DevSpaceはSecure MCP Tunnelを使わないため、`devspace-mcp` profileは持ちません。
+AliNavigatorの日常常駐管理は `local-mcp-alinavigator-tunnel.service` が担当します。
