@@ -4,23 +4,24 @@
 
 開発用途はChatGPTからCodexify 1本へ接続します。
 
-~~~text
-ChatGPT
-  │
-  ▼
-OpenAI Secure MCP Tunnel
-  ▼
-Codexify
-  ├─ native file / edit / git / exec / memory
-  ├─ MCP catalog
-  │    ├─ node_repl
-  │    └─ XServer
-  └─ exec_command
-       ▼
-     Orca CLI
-       ▼
-  Run / Task / Dispatch / Worker
-~~~
+```mermaid
+flowchart LR
+    chatgpt[ChatGPT]
+    devTunnel[OpenAI Secure MCP Tunnel]
+    hub[Local Dev Hub<br/>Codexify]
+    tools[File · Git · Shell<br/>Memory · Skills]
+    catalog[MCP catalog<br/>cua_repl · node_repl · XServer]
+    orca[Orca CLI / Orchestration<br/>worktree · Run · Task · Dispatch · Worker]
+    agents[Supervised coding agents<br/>Codex · OMP · OpenCode · others]
+    aliTunnel[Separate Secure MCP Tunnel]
+    ali[AliNavigator MCP]
+
+    chatgpt --> devTunnel --> hub
+    hub --> tools
+    hub --> catalog
+    hub -->|exec_command| orca --> agents
+    chatgpt --> aliTunnel --> ali
+```
 
 Codexifyは `openai/session` を使って同じChatのproject bindingを永続化します。
 MCP transportやCodexify processが入れ替わっても同じChatから復元できます。
@@ -30,8 +31,10 @@ planとnotesはactive root単位のmemoryから `recall` します。
 
 ## worktreeはOrcaだけが管理する
 
-Codexifyはmulti-project modeかつ `worktreeMode=never` で使います。
-通常の軽い作業はsource checkoutを直接編集し、並列・長時間作業だけOrcaでworktreeを作ります。
+Codexifyはmulti-project modeかつ `worktrees.mode=never` で使います。
+source checkoutは基準点として保ち、Git管理repoへ残す変更は原則Orca管理worktreeで行います。
+Local Dev Hubからの直操作は読み取り、テスト、machine config、最終統合を中心にします。
+Orca worktreeは `<projects-root>/.worktrees/<repo>/<worktree>` に配置します。
 
 これによりCodexify worktreeとOrca worktreeの二重管理を避けます。
 
@@ -66,8 +69,9 @@ ChatGPTの1ターン寿命はローカルMCPから保証できません。
 CodexifyはCodex user configのstdio / Streamable HTTP MCPをclientとして取り込みます。
 自動取込はcatalog modeを使い、upstreamの大量toolをChatGPTのtool catalogueへ直接展開しません。
 
-現在は `node_repl` と `xserver` を取り込みます。
-XServerを別Secure MCP Tunnelで公開する必要はありません。
+現在のCodexify catalog upstreamは `cua_repl`、`node_repl`、`XServer` です。
+`codexMcp.useCli=true` によりCodex CLIのeffective catalogueもcatalogへ加わり、plugin由来MCPも利用できます。
+XServer専用Secure MCP Tunnelはなく、開発Hubを経由します。
 
 ## AliNavigatorだけ独立Connectorを残す
 

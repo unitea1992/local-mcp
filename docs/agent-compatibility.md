@@ -11,7 +11,7 @@ The table records observed behavior, not a permanent vendor guarantee.
 | --- | --- | --- | --- | --- |
 | Codex | Yes | Yes | Passed | Supervised worker / handoff |
 | OMP | Yes | Yes | Passed | Supervised worker / handoff |
-| OpenCode 2.0.18 | Yes | Yes | Incomplete lifecycle observation | Direct terminal / handoff |
+| OpenCode 2.0.18 | Yes | Yes | Direct start may stall; prewarmed terminal route passed | `terminal create --command opencode`, wait for `tui-idle`, then `worker-start --terminal <handle>` |
 | Claude Code | No | Yes | Not tested | Test after installation; expected first-class |
 | Hermes Agent | No | Yes | Not tested | Test after installation; expected first-class |
 
@@ -19,8 +19,11 @@ OMP's initial worker-start receipt can report turn-start observation as unsuppor
 the worker unusable: in the 2026-09-27 acceptance test Orca subsequently exposed the OMP transcript and agent status,
 received `worker_done`, and settled the Dispatch as succeeded/completed.
 
-OpenCode behaved differently in the same environment: input was accepted, but the Dispatch stayed at
-`input_accepted` with missing agent status until the test worker was explicitly stopped.
+OpenCode's direct `worker-start --agent opencode` can accept input but remain at `input_accepted`. In a separate
+acceptance run, creating a terminal with `terminal create --command opencode`, waiting with
+`terminal wait --for tui-idle`, and then starting supervision with `worker-start --terminal <handle>` settled at
+`worker_done/succeeded`. Status liveness may report `missing_status`; use the accepted `worker_done` as the proof of
+completion.
 
 Orca upstream also has Hermes-specific startup, status-hook, session-history, skill mapping, and automation handling.
 Treat Hermes as a native Orca integration rather than a generic custom terminal.

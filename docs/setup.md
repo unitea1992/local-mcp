@@ -63,7 +63,7 @@ orca-ide skills get orca-cli
 orca-ide skills get orchestration
 ~~~
 
-通常の軽い編集はCodexify native toolsで行い、別worktree・長時間・並列agentが必要な場合だけOrcaへ渡します。
+Git管理repoへ残す変更は原則Orca管理worktreeで行います。Codexify native toolsは読み取り、テスト、machine config、最終統合に使います。
 
 ## 4. MCP catalogを確認する
 

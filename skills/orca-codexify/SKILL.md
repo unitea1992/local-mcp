@@ -1,114 +1,31 @@
 ---
 name: orca-codexify
-description: Use Codexify reliably for multi-step local development, checkpoint long work, and route long-running, parallel, or isolated coding work to Orca CLI and durable Orchestration.
+description: Use when delegating or supervising long-running, parallel, or isolated coding work from Local Dev Hub to Orca.
 ---
 
-# Orca through Codexify
+# Orca from Local Dev Hub
 
-Use Codexify native tools for ordinary repository work. Use Orca only when the task benefits from a separate
-worktree, a long-running agent, parallel execution, or durable supervised worker state.
+Use Local Dev Hub native tools for inspection, tests, machine configuration, and final integration. Route retained
+Git-repository changes, parallel agents, and durable supervised work to an Orca-managed worktree. Codexify
+worktrees are disabled; Orca owns worktree and orchestration state.
 
-## Make ordinary Codexify work resumable too
+## Before Orca operations
 
-For multi-step work, keep `update_plan` current and save only information that would be expensive to rediscover.
-Prefer short MCP calls. If a local command cannot finish promptly, yield it to a Codexify session and poll the
-returned handle instead of holding one MCP call open.
-
-At a natural phase boundary, assess the remaining work. Continue in the same turn when the remainder is short.
-When another substantial phase remains, save the checkpoint and give the user a concise progress report before
-starting that phase. The next turn should be able to continue from the saved plan without repeating completed work.
-Do not keep an otherwise idle turn alive merely to wait for background work.
-
-## Always load the installed Orca contract first
-
-Orca changes quickly. Before a non-trivial Orca operation, read the bundled guide from the installed version.
+Orca's installed CLI and bundled skills define the current execution contract. Read the relevant current skill and
+command `--help` before a non-trivial operation; this guide and its references are workflow guidance, not a CLI
+specification:
 
 ~~~bash
 orca-ide skills get orca-cli
 orca-ide skills get orchestration
 ~~~
 
-Treat those guides and current `--help` output as authoritative over copied examples in this skill.
+Load only the workflow reference needed for the task:
 
-## Prefer short MCP calls
+- Agent selection, compatibility, or acceptance: [references/agents.md](references/agents.md)
+- Worktree, Run, Task, Dispatch, worker lifecycle, or retries: [references/orchestration.md](references/orchestration.md)
+- Checkpoints, long commands, or cross-chat resume: [references/continuity.md](references/continuity.md)
 
-Run Orca commands through Codexify `exec_command` with JSON output. Let Codexify yield quickly and return a
-session handle when the CLI call takes longer. Continue the same command with `write_stdin`; do not start it again.
-
-For an unknown mutation result, inspect Orca state before retrying. Reuse Orca's returned mutation/request ID with
-the documented `--retry-request` flow only when it is the exact same operation.
-
-## Supervised worker flow
-
-Prefer an agent whose supervised lifecycle has been acceptance-tested on the installed Orca version.
-
-Current verified matrix:
-
-- Codex: supervised lifecycle verified through `worker_done` and `succeeded/completed`.
-- OMP: supervised lifecycle verified through `worker_done` and `succeeded/completed`. Its initial start receipt
-  can report turn-start observation as unsupported, but Orca subsequently provides OMP transcript/status and
-  settles the Dispatch correctly.
-- OpenCode 2.0.18: prompt input can be accepted while turn-start and agent-status observation remain unsupported,
-  leaving the Dispatch at `input_accepted`. Use it for direct terminal work or handoff unless a fresh acceptance
-  test proves reliable lifecycle settlement.
-- Claude Code: Orca 1.4.212 advertises native `claude` worker support, including provider model selection. Treat it
-  as native-but-unverified until Claude Code is installed and the acceptance test below passes.
-- Hermes Agent: Orca upstream advertises native `hermes` support and includes Hermes-specific startup, hooks,
-  session-history, skill mapping, and automation handling. Treat it as native-but-unverified until installed and
-  the acceptance test below passes.
-
-Do not hard-code the list as a permanent compatibility contract. Re-read the installed Orca skill/help before use.
-
-## New agent compatibility gate
-
-When a new CLI agent is installed, classify it without changing Local Dev Hub code:
-
-1. Confirm the executable is available.
-2. Re-read `orca-ide skills get orca-cli`, `orca-ide skills get orchestration`, and
-   `orca-ide orchestration worker-start --help`.
-3. If Orca advertises the agent ID, run one read-only supervised acceptance task with `worker-start --agent <id>`.
-4. Require positive evidence of task execution and an accepted `worker_done` that settles the Dispatch.
-5. Confirm `worker-read --source auto` can retrieve useful output and cleanup/release behaves correctly.
-6. Only then mark the agent as a preferred supervised worker.
-
-If Orca does not advertise the agent:
-
-1. Start it with `terminal create --command "<agent command>"` and wait for TUI readiness when applicable.
-2. If Orca recognizes the terminal as an agent, `worker-start --terminal <handle>` may be used to give the existing
-   terminal supervised lifecycle ownership.
-3. If supervised ownership is unavailable, the low-level
-   `orchestration dispatch --inject` path may inject a Task into an operator-created terminal, but that lane is
-   explicitly unsupervised: Orca does not own or stop the process and release performs no process cleanup.
-4. Otherwise use the agent only as a direct terminal/handoff target. Never claim durable completion tracking for an
-   unverified custom agent.
-
-For an existing workspace:
-
-1. Resolve the exact Orca worktree with `orca-ide worktree list --json`.
-2. Create a dedicated coordinator terminal on the exact `path:` selector.
-3. Create an Orchestration Run with `run-create --from <coordinator>`.
-4. Start a worker with the exact worktree, Run ID, and coordinator handle.
-5. Inspect it with `worker-show` and `worker-read`.
-6. After it settles, call `worker-release`.
-7. Close the dedicated coordinator terminal.
-
-For an isolated task, first create the worktree explicitly with `orca-ide worktree create --json`, then follow the
-same flow using the returned exact path. Do not depend on pseudo-selectors such as `new-top-level` when an explicit
-create followed by an exact selector is available.
-
-Remove a temporary worktree only after confirming the task is settled and no wanted changes remain.
-
-## Cross-chat continuity
-
-Store expensive-to-rediscover state in Codexify:
-
-- keep the current multi-step work in `update_plan`;
-- remember Orca Run / Task / Dispatch IDs and the exact worktree path when they are still needed;
-- in a new ChatGPT conversation, resume the exact Codexify workspace first, then call `recall`;
-- query Orca for live state instead of assuming the saved note is current.
-
-## Turn boundaries
-
-The MCP server cannot guarantee that ChatGPT keeps one turn alive indefinitely. At a meaningful phase boundary,
-save the plan and durable IDs. If substantial work remains, report current progress to the user and continue in the
-next turn rather than keeping an otherwise idle turn open.
+Keep Orca idempotency and lifecycle decisions in Orca. After an ambiguous mutation, inspect state before retrying;
+reuse a returned request ID only with the installed CLI's documented retry flow. Do not create a duplicate operation
+because a response was lost.

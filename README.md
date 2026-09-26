@@ -5,19 +5,27 @@ ChatGPTからローカル開発環境へ接続する経路と、独立して残�
 
 現在の開発経路はCodexifyへ集約しています。
 
-~~~text
-ChatGPT
-  │
-  ├─ Codexify ─ OpenAI Secure MCP Tunnel
-  │    ├─ native coding tools
-  │    ├─ MCP catalog ─ node_repl / XServer
-  │    └─ exec_command ─ Orca CLI ─ Orchestration ─ OpenCode / Codex / ...
-  │
-  └─ AliNavigator MCP ─ Secure MCP Tunnel ─ alinavigator-mcp ─ api.ali-navi.com
+~~~mermaid
+flowchart LR
+    chatgpt[ChatGPT]
+    devTunnel[OpenAI Secure MCP Tunnel]
+    hub[Local Dev Hub<br/>Codexify]
+    tools[File · Git · Shell<br/>Memory · Skills]
+    catalog[MCP catalog<br/>cua_repl · node_repl · XServer]
+    orca[Orca CLI / Orchestration<br/>worktree · Run · Task · Dispatch · Worker]
+    agents[Supervised coding agents<br/>Codex · OMP · OpenCode · others]
+    aliTunnel[Separate Secure MCP Tunnel]
+    ali[AliNavigator MCP]
+
+    chatgpt --> devTunnel --> hub
+    hub --> tools
+    hub --> catalog
+    hub -->|exec_command| orca --> agents
+    chatgpt --> aliTunnel --> ali
 ~~~
 
-Codexifyはmulti-project modeで `<projects-root>` 配下を扱い、Codexify自身のworktreeは使いません。
-並行作業や長時間agent作業のworktreeはOrcaへ一本化します。
+Codexifyはmulti-project modeで `<projects-root>` 配下を扱い、`worktrees.mode=never` で動かします。
+並行作業や長時間agent作業のworktreeはOrcaへ一本化し、`<projects-root>/.worktrees/<repo>/<worktree>` に配置します。
 
 ## なぜCodexifyへ集約したか
 
@@ -26,7 +34,7 @@ Codexifyはmulti-project modeで `<projects-root>` 配下を扱い、Codexify自
 - MCP transportが切れても同じChatのproject bindingとtask memoryを復元できる
 - 新しいChatからexact `resumePath` と `recall` で同じcheckoutとtask stateを引き継げる
 - 長時間commandは短いMCP callでsession handleを返し、別transportから継続できる
-- Codex設定のXServer 137 toolsをcatalog modeの固定4 toolsへ集約できる
+- Codex設定のMCPとCodex CLIのeffective catalogueをcatalog modeへ集約できる
 - Codexify経由でOrca Run / Task / Dispatch / Workerを起動・監督・解放できる
 - Orca管理worktree上でも同じsupervised workerフローが動く
 
@@ -52,16 +60,16 @@ Orca用のCodexify Skillは次でuser-global skillへリンクします。
 
 ## OrcaはCodexifyからCLIで使う
 
-軽い変更はCodexify native toolsで直接処理します。
-長時間・並列・別worktreeのagent作業だけOrca Orchestrationへ渡します。
+Local Dev Hubのnative toolsは読み取り、テスト、machine config、最終統合に使います。
+Git管理repoへ残す変更は原則Orca管理worktreeへ切り出し、長時間・並列agentもOrca Orchestrationへ渡します。
 
 supervised workerはCodexまたはOMPを既定にします。Orca 1.4.212では両方とも
 `worker_done → succeeded/completed` まで実機確認済みです。
 
-OpenCode 2.0.18では、
-prompt inputは受理されてもturn開始・agent statusの観測が取れず、
-Dispatchが `input_accepted` のまま残るケースを実機確認しています。
-OpenCodeはdirect terminal / handoff用途では利用できますが、完了判定が必要なsupervised workerではCodex / OMPを優先します。
+OpenCode 2.0.18は `worker-start --agent opencode` だと `input_accepted` のまま停滞する場合があります。
+一方、`terminal create --command opencode` の後に `terminal wait --for tui-idle` を行い、
+そのterminal handleを `worker-start --terminal <handle>` へ渡す手順は `worker_done/succeeded` まで実測成功しました。
+status livenessが `missing_status` の場合もあるため、完了の証明には受理された `worker_done` を使います。
 
 agent固有のadapterはlocal-mcpへ追加しません。新しいagentはOrcaの現在の契約に応じて、
 native supervised、既存terminal supervised、unsupervised terminalの順に利用可能性を判定します。
@@ -89,7 +97,8 @@ coordinator terminal、Run、supervised workerを作ります。
 Codexifyは `~/.codex/config.toml` のMCPを読み込みます。
 自動取込はcatalog modeを使い、大きなtool catalogueをChatGPTへ直接展開しません。
 
-現在の開発Hubには `node_repl` と `xserver` を取り込んでいます。
+現在の開発HubはCodexifyのcatalog upstreamとして `cua_repl`、`node_repl`、`XServer` を取り込んでいます。
+`codexMcp.useCli=true` によりCodex CLIのeffective catalogueも加わり、plugin由来MCPもcatalogから利用できます。
 AliNavigatorは開発経路とは用途が異なるため、専用Connectorのまま残します。
 
 ## AliNavigator Tunnel

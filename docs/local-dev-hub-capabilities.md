@@ -23,7 +23,7 @@ DevSpaceからCodexify + Orcaへ移行した後の実用上の対応関係と、
 | subagent / 並列agent | 対応 | Orca Run / Task / Dispatch / Worker |
 | agent session監督 | 対応 | Orca `worker-show`, `worker-read`, durable Dispatch |
 | 他MCPの集約 | 強化 | Codexify catalog modeでschemaを大量公開せず検索・実行 |
-| XServer MCP | 対応 | Local Dev Hub内のcatalog upstreamとして利用 |
+| MCP upstream | 対応 | `cua_repl`、`node_repl`、`XServer`をcatalog経由で利用 |
 
 ## 主な差分・制約
 
@@ -53,7 +53,7 @@ worktree所有者をOrcaだけにして、同じ論理タスクに2種類のwork
 | `workDir` | 起動時指定 / null | projects root | project catalogueのaccess rootを固定するため |
 | `worktrees.mode` | auto | never | worktreeをOrcaへ一本化し、二重作成を防ぐため |
 | `codexMcp.enabled` | true | true | Codex設定のMCPをLocal Dev Hubへ集約するため |
-| `codexMcp.useCli` | true | true | Codex plugin由来MCPも自動発見するため |
+| `codexMcp.useCli` | true | true | Codex CLIのeffective catalogueも取り込み、plugin由来MCPを自動発見するため |
 | `experimental.claudeSkills` | false | true | 将来Claude Code導入時にClaude-owned Skillも自動発見するため |
 | `agentChat.enabled` | false | false | ChatGPT + Codexify memory + Orca messagingで足りるため。別Markdown chatを増やさない |
 | `experimental.agentTickets` | false | false | downstream response lossを完全観測できず、枝をstrandする可能性があるため |
