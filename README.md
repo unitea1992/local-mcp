@@ -69,13 +69,16 @@ supervised workerはCodexまたはOMPを既定にします。Orca 1.4.212では�
 OpenCode 2.0.18は `worker-start --agent opencode` だと `input_accepted` のまま停滞する場合があります。
 一方、`terminal create --command opencode` の後に `terminal wait --for tui-idle` を行い、
 そのterminal handleを `worker-start --terminal <handle>` へ渡す手順は `worker_done/succeeded` まで実測成功しました。
-status livenessが `missing_status` の場合もあるため、完了の証明には受理された `worker_done` を使います。
+
+Orcaのstatus livenessが `missing_status` の場合もあるため、完了の証明には受理された `worker_done` を使います。
 
 agent固有のadapterはlocal-mcpへ追加しません。新しいagentはOrcaの現在の契約に応じて、
 native supervised、既存terminal supervised、unsupervised terminalの順に利用可能性を判定します。
+
 Claude CodeはOrca 1.4.212がnative agent `claude` として明示対応しています。
 Hermes AgentもOrca本体のagent catalog / TUI agent selectionでnative `hermes` として対応しています。
 どちらも未導入なので、導入後にread-only acceptance testを1回通してsupervised lifecycleを確認します。
+
 現在の実測matrixと追加手順は [Agent互換性](docs/agent-compatibility.md) にまとめています。
 
 DevSpaceからの機能移行状況とCodexify設定の理由は
@@ -110,7 +113,8 @@ CodexifyのTunnelから継承します。
 
 Runtime API keyは `~/.config/local-mcp/runtime-api-key` に置き、Gitへ保存しません。
 CodexifyとAliNavigator Tunnelは同じRestricted keyを参照でき、TunnelsのRead + Useだけを持たせます。
-AliNavigatorのGateway Access資格情報は ~/.config/local-mcp/alinavigator.env に分離し、Gitへ保存しません。
+
+AliNavigatorのGateway Access資格情報は `~/.config/local-mcp/alinavigator.env` に分離し、Gitへ保存しません。
 Runtime / Admin API keyは現在のユーザー所有・mode 600で管理します。
 
 `tunnel-client` は `config/tunnel-client.version` でバージョンを固定し、

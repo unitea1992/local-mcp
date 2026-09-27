@@ -61,7 +61,13 @@ worktree所有者をOrcaだけにして、同じ論理タスクに2種類のwork
 | `openaiTunnel` | null | 有効 | ChatGPTからloopback serverへSecure MCP Tunnelで接続するため |
 | `openaiTunnel.clientPath` | 未指定 | 未指定 | Codexify自身のpinned runtimeを使い、Tunnel client互換性をCodexifyへ任せるため |
 
-その他のoutput budget、exec session数、artifact ingress/egress、memory、Skill discovery、ignore規則などは標準値を維持しています。
+その他は標準値を維持しています。主な対象は次のとおりです。
+
+- output budget
+- exec session数
+- artifact ingress/egress
+- memory / Skill discovery
+- ignore規則
 
 ## 個人利用向けの方針
 
