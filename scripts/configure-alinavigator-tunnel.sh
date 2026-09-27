@@ -19,6 +19,10 @@ probe_launcher="$HOME/.local/bin/alinavigator-mcp-probe"
 [[ "$tunnel_id" =~ ^tunnel_[0-9a-f]{32}$ ]] || { echo "Tunnel IDの形式が不正です: $tunnel_id" >&2; exit 1; }
 for command in tunnel-client jq; do command -v "$command" >/dev/null 2>&1 || { echo "$command が見つかりません。" >&2; exit 1; }; done
 [[ -s "$runtime_key" ]] || { echo "Runtime API keyが見つかりません。" >&2; exit 1; }
+[[ "$(stat -Lc '%u' "$runtime_key")" == "$(id -u)" && "$(stat -Lc '%a' "$runtime_key")" == "600" ]] || {
+  echo "Runtime API keyは現在のユーザー所有・mode 600で保存してください。" >&2
+  exit 1
+}
 [[ -f "$codexify_config" ]] || { echo "Codexify configが見つかりません: $codexify_config" >&2; exit 1; }
 [[ -x "$launcher" ]] || { echo "AliNavigator MCP launcherが見つかりません。" >&2; exit 1; }
 [[ -x "$probe_launcher" ]] || { echo "AliNavigator MCP probeが見つかりません。" >&2; exit 1; }

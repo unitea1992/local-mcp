@@ -30,6 +30,7 @@ trap 'rm -rf "$tmp_dir"' EXIT
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 version_file="$repo_root/config/tunnel-client.version"
+checksum_file="$repo_root/config/tunnel-client.sha256"
 version="$(tr -d '[:space:]' < "$version_file")"
 if [[ ! "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   echo "不正なバージョン指定です: $version"
@@ -41,9 +42,8 @@ base="https://github.com/openai/tunnel-client/releases/download/${version}"
 
 echo "検証済みのOpenAI tunnel-client ${version} を取得します"
 curl -fsSL "${base}/${asset}" -o "$tmp_dir/$asset"
-curl -fsSL "${base}/SHA256SUMS.txt" -o "$tmp_dir/SHA256SUMS.txt"
 
-expected="$(awk -v name="$asset" '$2 == name {print $1}' "$tmp_dir/SHA256SUMS.txt")"
+expected="$(awk -v name="$asset" '$2 == name {print $1}' "$checksum_file")"
 actual="$(sha256sum "$tmp_dir/$asset" | awk '{print $1}')"
 if [[ -z "$expected" || "$expected" != "$actual" ]]; then
   echo "SHA256の検証に失敗しました。インストールしません。"
@@ -56,6 +56,6 @@ unzip -p "$tmp_dir/$asset" tunnel-client > "$install_dir/tunnel-client"
 chmod 0755 "$install_dir/tunnel-client"
 ln -sfn "$install_dir/tunnel-client" "$HOME/.local/bin/tunnel-client"
 
-echo "インストール完了: $($HOME/.local/bin/tunnel-client --version)"
+echo "インストール完了: $("${HOME}/.local/bin/tunnel-client" --version)"
 echo "Cloudflare companionは今回使わないためインストールしていません。"
 

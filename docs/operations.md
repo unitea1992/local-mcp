@@ -98,6 +98,9 @@ profileを再作成する場合は次を使います。
 ## tunnel-clientを更新する
 
 AliNavigatorのstandalone Tunnelではlocal-mcp管理のtunnel-clientを使います。
+`config/tunnel-client.version` を更新する際は、OpenAI公式releaseの `SHA256SUMS.txt` と照合した
+Linux amd64 / arm64のSHA256を `config/tunnel-client.sha256` へ同時に反映します。
+固定checksumと一致しないassetはインストールされません。
 
 ~~~bash
 ./scripts/install-tunnel-client.sh

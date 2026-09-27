@@ -21,6 +21,10 @@ if [[ ! -s "$runtime_key" ]]; then
   echo "Runtime API keyが見つかりません: ~/.config/local-mcp/runtime-api-key"
   exit 1
 fi
+if [[ "$(stat -Lc '%u' "$runtime_key")" != "$(id -u)" || "$(stat -Lc '%a' "$runtime_key")" != "600" ]]; then
+  echo "Runtime API keyは現在のユーザー所有・mode 600で保存してください。"
+  exit 1
+fi
 
 if [[ ! -s "$runtime_env" ]]; then
   echo "Tunnel organization contextが見つかりません: ~/.config/local-mcp/tunnel.env"

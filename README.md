@@ -111,6 +111,10 @@ CodexifyのTunnelから継承します。
 Runtime API keyは `~/.config/local-mcp/runtime-api-key` に置き、Gitへ保存しません。
 CodexifyとAliNavigator Tunnelは同じRestricted keyを参照でき、TunnelsのRead + Useだけを持たせます。
 AliNavigatorのGateway Access資格情報は ~/.config/local-mcp/alinavigator.env に分離し、Gitへ保存しません。
+Runtime / Admin API keyは現在のユーザー所有・mode 600で管理します。
+
+`tunnel-client` は `config/tunnel-client.version` でバージョンを固定し、
+`config/tunnel-client.sha256` に保存した検証済みSHA256と一致する公式release assetだけを導入します。
 
 Tunnel管理用のAdmin API keyは `~/.config/local-mcp/admin-api-key` に置き、
 Runtime API keyと同様に現在のユーザー所有・mode 600で管理します。

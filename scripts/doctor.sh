@@ -61,6 +61,16 @@ fi
 
 echo
 echo "-- AliNavigator Tunnel --"
+if [[ ! -s "$RUNTIME_KEY" ]]; then
+  echo "Runtime API key: missing"
+  failed=1
+elif [[ "$(stat -Lc '%u' "$RUNTIME_KEY")" != "$(id -u)" || "$(stat -Lc '%a' "$RUNTIME_KEY")" != "600" ]]; then
+  echo "Runtime API key: unsafe permissions"
+  failed=1
+else
+  echo "Runtime API key: permissions OK"
+fi
+
 if [[ ! -s "$ALI_ENV" ]]; then
   echo "AliNavigator Gateway資格情報: missing"
   failed=1
