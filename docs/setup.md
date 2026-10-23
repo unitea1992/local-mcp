@@ -98,7 +98,64 @@ ALINAVIGATOR_ACCESS_CLIENT_SECRET=...
 ./scripts/configure-alinavigator-tunnel.sh tunnel_...
 ~~~
 
-## 6. 確認する
+## 6. Browser Companionの仮想画面を用意する
+
+Browser CompanionはCodexifyが起こしたプロセスの環境を受け継ぎます。
+`codexify.service` の環境に `DISPLAY` がないとRDPなしではCompanionが起きず、
+ユーザーのsystemd環境にはGNOMEセッションから `XDG_SESSION_TYPE=wayland` が残るため
+Companion（Electron）はWaylandを選んで失敗します。
+そこで仮想画面をCodexify専用に `:99` ひとつ立てて渡し、X11を明示します。
+`:98` はAliNavigator側の仮想画面のため、共有せず分けます。
+
+仮想画面は `~/.config/systemd/user/codexify-display.service` に置きます。
+
+~~~ini
+[Unit]
+Description=Codexify: virtual display :99 for the browser companion
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/Xvfb :99 -screen 0 1920x1080x24 -nolisten tcp
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target
+~~~
+
+環境変数は `~/.config/systemd/user/codexify.service.d/display.conf` へのdrop-inで渡します。
+`Wants` / `After` により、Companionが起きる前に画面が立つようcodexify.serviceから呼ばれます。
+
+~~~ini
+# Browser Companion は起こしたプロセスの環境を受け継ぐ。RDP なしでも立て直せるよう、専用の仮想画面 :99 を渡す。
+# ユーザーの systemd には GNOME のセッションから XDG_SESSION_TYPE=wayland が残るため、X11 を明示する。
+[Unit]
+Wants=codexify-display.service
+After=codexify-display.service
+
+[Service]
+Environment=DISPLAY=:99
+Environment=XDG_SESSION_TYPE=x11
+Environment=WAYLAND_DISPLAY=
+# 送信の段ごとの記録（上流 Issue #12 の調査用。直ったら消す）
+Environment=CODEXIFY_BROWSER_TRACE_SUBMISSION=1
+~~~
+
+設定を反映します。
+
+~~~bash
+systemctl --user daemon-reload
+systemctl --user enable --now codexify-display.service
+systemctl --user status codexify-display.service
+~~~
+
+`codexify.service` は次の起動からdrop-inの環境変数を読みます。
+Companionがreadyになることは `~/.codexify/browser/companion.log` で確認してください。
+`CODEXIFY_BROWSER_TRACE_SUBMISSION=1` は送信の段階をそれぞれ記録するもので、
+上流の不具合 [devnoname120/codexify#12](https://github.com/devnoname120/codexify/issues/12) の調査用です。
+このIssueが直ったらdrop-inのこの行を消します。
+
+## 7. 確認する
 
 ~~~bash
 ./scripts/check.sh
@@ -109,4 +166,4 @@ ALINAVIGATOR_ACCESS_CLIENT_SECRET=...
 ChatGPT側では開発用Connectorのtool一覧をRefreshし、新しいChatでCodexifyのtoolが見えることを確認します。
 古いChatは読み込んだtool schemaを保持するため、切替確認には新しいChatを使います。
 
-最終更新: 2026-09-27
+最終更新: 2026-10-24

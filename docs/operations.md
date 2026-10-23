@@ -26,6 +26,18 @@ curl -fsS http://127.0.0.1:3137/health
 起動直後はMCP aggregationとSecure MCP Tunnelの準備中でhealthが一時的に503になる場合があります。
 service logでTunnel readyまで進んでいるか確認してから再診断します。
 
+## Browser Companionが起きない
+
+~~~bash
+systemctl --user status codexify-display.service
+systemctl --user show codexify.service --property=Environment,DropInPaths
+tail -50 ~/.codexify/browser/companion.log
+~~~
+
+Companionは `codexify.service` の環境を受け継ぎます。
+仮想画面 `:99` と環境変数の設定は [初回セットアップ](setup.md) の「Browser Companionの仮想画面を用意する」を参照してください。
+`codexify.service` の環境は次の起動からdrop-inを読み込みます。
+
 ## ChatGPT側で古いtoolが見える
 
 Connectorのtool一覧は既存Chatへ即時反映されません。
@@ -110,4 +122,4 @@ systemctl --user restart local-mcp-alinavigator-tunnel.service
 
 Codexifyの開発Hub TunnelはCodexify設定の `clientPath` を使います。
 
-最終更新: 2026-09-27
+最終更新: 2026-10-24
