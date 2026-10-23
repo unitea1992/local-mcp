@@ -55,7 +55,7 @@ worktree所有者をOrcaだけにして、同じ論理タスクに2種類のwork
 | `codexMcp.enabled` | true | true | Codex設定のMCPをLocal Dev Hubへ集約するため |
 | `codexMcp.useCli` | true | true | Codex CLIのeffective catalogueも取り込み、plugin由来MCPを自動発見するため |
 | `experimental.claudeSkills` | false | true | 将来Claude Code導入時にClaude-owned Skillも自動発見するため |
-| `agentChat.enabled` | false | false | ChatGPT + Codexify memory + Orca messagingで足りるため。別Markdown chatを増やさない |
+| `agentChat.enabled` | false | false | 一度trueにして試したが、Companion経由の会話作成・結び付けが上流Issue devnoname120/codexify#12で失敗するため2026-10-24にfalseへ戻した。待機中の会話だけを相手にする形はオーナーが毎回待機させる手間が要る。上流が直ったらtrueにして試し直す |
 | `experimental.agentTickets` | false | false | downstream response lossを完全観測できず、枝をstrandする可能性があるため |
 | `port` | 3000 | 3137 | 既存local serviceとの衝突を避け、現在安定しているlisten portを維持 |
 | `openaiTunnel` | null | 有効 | ChatGPTからloopback serverへSecure MCP Tunnelで接続するため |
