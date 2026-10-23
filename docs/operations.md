@@ -29,6 +29,7 @@ service logでTunnel readyまで進んでいるか確認してから再診断し
 ## Browser Companionが起きない
 
 ~~~bash
+systemctl --user status codexify.service
 systemctl --user status codexify-display.service
 systemctl --user show codexify.service --property=Environment,DropInPaths
 tail -50 ~/.codexify/browser/companion.log
