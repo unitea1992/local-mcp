@@ -35,8 +35,8 @@ tail -50 ~/.codexify/browser/companion.log
 ~~~
 
 Companionは `codexify.service` の環境を受け継ぎます。
+unit定義やdrop-inを直したあとは、`systemctl --user daemon-reload` を流してから `codexify.service` を再起動します。
 仮想画面 `:99` と環境変数の設定は [初回セットアップ](setup.md) の「Browser Companionの仮想画面を用意する」を参照してください。
-`codexify.service` の環境は次の起動からdrop-inを読み込みます。
 
 ## ChatGPT側で古いtoolが見える
 

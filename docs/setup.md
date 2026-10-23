@@ -150,6 +150,7 @@ systemctl --user status codexify-display.service
 ~~~
 
 `codexify.service` は次の起動からdrop-inの環境変数を読みます。
+既に `codexify.service` を起動済みのときは、`systemctl --user restart codexify.service` を行ってから確認します。
 Companionがreadyになることは `~/.codexify/browser/companion.log` で確認してください。
 `CODEXIFY_BROWSER_TRACE_SUBMISSION=1` は送信の段階をそれぞれ記録するもので、
 上流の不具合 [devnoname120/codexify#12](https://github.com/devnoname120/codexify/issues/12) の調査用です。
