@@ -1,4 +1,6 @@
-# 日常運用はCodexifyを中心に見る
+# 日常運用
+
+開発・worktree・長時間エージェント作業はT3 Codeで行います。このリポジトリのCodexify／Orca連携記述は移行前の記録で、現行手順ではありません。
 
 ## 状態確認
 
@@ -6,7 +8,7 @@
 ./scripts/status.sh
 ~~~
 
-Codexify service、Orca CLI、AliNavigator Tunnelの状態をまとめて確認します。
+local-mcpが管理するAliNavigator Tunnelの状態などを表示します。T3 Codeの状態はT3 Code内で確認します。
 
 詳しい診断は次です。
 
@@ -54,31 +56,6 @@ session IDが返ったら同じ処理を起動し直さず、`write_stdin` でpo
 
 ChatGPTの1ターン寿命そのものは保証できないため、長い作業ではフェーズ境界でplanと必要なnoteを保存します。
 次フェーズも長い場合は一度進捗をユーザーへ返し、次ターンから続行します。
-
-## Orcaで長時間agentを動かす
-
-まず現在の契約を確認します。
-
-~~~bash
-orca-ide skills get orca-cli
-orca-ide skills get orchestration
-~~~
-
-基本は専用coordinator terminalとRunを作り、supervised workerを起動します。
-
-~~~text
-exact worktree
-  → coordinator terminal
-  → Run
-  → Task / Dispatch / Worker
-  → worker-show / worker-read
-  → worker-release
-~~~
-
-新規worktreeが必要なら `orca-ide worktree create` を先に実行し、返されたexact pathを使います。
-作成結果が不明な時は同じ名前で別worktreeを作らず、まず `worktree list` とOrchestration stateを確認します。
-
-Orca mutationのresponseが不明な場合は、現在のCLIが返すrequest IDと `--retry-request` の契約に従います。
 
 ## AliNavigatorだけ接続できない
 

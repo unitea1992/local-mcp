@@ -32,7 +32,7 @@ else
   printf "%-16s --  not installed\n" codexify
 fi
 
-for name in orca-ide tunnel-client jq rumdl; do
+for name in tunnel-client jq rumdl; do
   if command -v "$name" >/dev/null 2>&1; then
     printf "%-16s OK  %s\n" "$name" "$(command -v "$name")"
   else
@@ -53,11 +53,6 @@ if [[ -x "$CODEXIFY_BIN" ]]; then
 fi
 
 echo
-if command -v orca-ide >/dev/null 2>&1; then
-  printf "Orca:            "
-  orca-ide --version 2>/dev/null || echo "version unavailable"
-fi
-
 printf "AliNavigator Tunnel: "
 if systemctl_user is-active --quiet local-mcp-alinavigator-tunnel.service 2>/dev/null; then
   echo "active"

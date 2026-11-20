@@ -1,4 +1,6 @@
-# 初回セットアップはCodexifyを中心にする
+# local-mcpのセットアップ
+
+このリポジトリはAliNavigator Secure MCP Tunnelなどの独立したローカルMCP運用を管理します。開発Hub、Orca連携、worktree、エージェント起動はT3 Codeへ移行済みです。Codexifyに関する以下の旧セットアップ記述は、現行開発環境の再構築手順として使わないでください。
 
 この章は初回セットアップや再構築時に使います。普段の確認は [運用ガイド](operations.md) を参照してください。
 
@@ -12,7 +14,7 @@ codexify quickstart
 ~~~
 
 個人開発環境ではmulti-project modeを選び、普段のプロジェクト群を含むrootを指定します。
-Codexify自身にはworktreeを作らせず、worktreeはOrcaへ一本化します。
+現在はT3 Codeのproject worktree機能を使います。
 
 設定の要点は次です。
 
@@ -48,22 +50,6 @@ codexify doctor
 
 起動直後はupstream MCPとTunnelの初期化に数秒かかることがあります。
 `doctor` のhealthだけが一時的に失敗する場合はservice logを確認し、`OpenAI Secure MCP Tunnel: ready` 後に再実行します。
-
-## 3. Orca連携Skillを有効化する
-
-~~~bash
-./scripts/install-orca-codexify-skill.sh
-~~~
-
-Orcaは独自MCPを挟まず、Codexifyの `exec_command` から `orca-ide` を呼びます。
-実行前にインストール済みOrcaのbundled skillを正本として確認します。
-
-~~~bash
-orca-ide skills get orca-cli
-orca-ide skills get orchestration
-~~~
-
-Git管理repoへ残す変更は原則Orca管理worktreeで行います。Codexify native toolsは読み取り、テスト、machine config、最終統合に使います。
 
 ## 4. MCP catalogを確認する
 

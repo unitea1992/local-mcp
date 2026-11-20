@@ -43,22 +43,6 @@ else
 fi
 
 echo
-echo "-- Orca --"
-if command -v orca-ide >/dev/null 2>&1 && orca-ide status --json >/dev/null 2>&1; then
-  echo "Orca CLI/runtime: OK"
-else
-  echo "Orca CLI/runtime: NG"
-  failed=1
-fi
-
-skill="$HOME/.agents/skills/orca-codexify"
-if [[ -L "$skill" && -f "$skill/SKILL.md" ]]; then
-  echo "Orca Codexify skill: OK"
-else
-  echo "Orca Codexify skill: missing (run ./scripts/install-orca-codexify-skill.sh)"
-  failed=1
-fi
-
 echo
 echo "-- AliNavigator Tunnel --"
 if [[ ! -s "$RUNTIME_KEY" ]]; then
