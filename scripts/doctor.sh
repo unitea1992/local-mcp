@@ -5,17 +5,7 @@ PROFILE_DIR="${LOCAL_MCP_PROFILE_DIR:-$HOME/.config/local-mcp/tunnel-profiles}"
 ADMIN_KEY="$HOME/.config/local-mcp/admin-api-key"
 RUNTIME_KEY="$HOME/.config/local-mcp/runtime-api-key"
 ALI_ENV="$HOME/.config/local-mcp/alinavigator.env"
-CODEXIFY_CONFIG="${CODEXIFY_CONFIG:-$HOME/.codexify/codexify.config.json}"
-CODEXIFY_BIN="${CODEXIFY_BIN:-}"
 failed=0
-
-if [[ -z "$CODEXIFY_BIN" ]]; then
-  if command -v codexify >/dev/null 2>&1; then
-    CODEXIFY_BIN="$(command -v codexify)"
-  else
-    CODEXIFY_BIN="$HOME/.codexify/bin/codexify"
-  fi
-fi
 
 systemctl_user() {
   local runtime_dir
@@ -29,35 +19,6 @@ systemctl_user() {
 
 echo "== local-mcp doctor =="
 echo
-
-echo "-- Codexify --"
-if [[ -x "$CODEXIFY_BIN" ]]; then
-  if "$CODEXIFY_BIN" --config "$CODEXIFY_CONFIG" doctor; then
-    :
-  else
-    failed=1
-  fi
-else
-  echo "Codexify: not installed"
-  failed=1
-fi
-
-echo
-echo "-- Orca --"
-if command -v orca-ide >/dev/null 2>&1 && orca-ide status --json >/dev/null 2>&1; then
-  echo "Orca CLI/runtime: OK"
-else
-  echo "Orca CLI/runtime: NG"
-  failed=1
-fi
-
-skill="$HOME/.agents/skills/orca-codexify"
-if [[ -L "$skill" && -f "$skill/SKILL.md" ]]; then
-  echo "Orca Codexify skill: OK"
-else
-  echo "Orca Codexify skill: missing (run ./scripts/install-orca-codexify-skill.sh)"
-  failed=1
-fi
 
 echo
 echo "-- AliNavigator Tunnel --"
@@ -111,12 +72,10 @@ if [[ -s "$ADMIN_KEY" ]]; then
   if [[ "$(stat -Lc '%u' "$ADMIN_KEY")" != "$(id -u)" || "$(stat -Lc '%a' "$ADMIN_KEY")" != "600" ]]; then
     echo "Local MCP Admin key: unsafe permissions"
     failed=1
-  elif [[ -s "$RUNTIME_KEY" ]] && command -v jq >/dev/null 2>&1 && [[ -f "$CODEXIFY_CONFIG" ]]; then
-    hub_tunnel_id="$(jq -r '.openaiTunnel.tunnelId // .openaiTunnels[0].tunnelId // empty' "$CODEXIFY_CONFIG" 2>/dev/null)"
-    if [[ "$hub_tunnel_id" =~ ^tunnel_[0-9a-f]{32}$ ]] && \
-       workspace_id="$(tunnel-client admin tunnels get "$hub_tunnel_id" --admin-key "file:$RUNTIME_KEY" --json 2>/dev/null | jq -r '.workspace_ids[0] // empty')" && \
-       [[ -n "$workspace_id" ]] && \
-       tunnel-client admin tunnels list --admin-key "file:$ADMIN_KEY" --workspace-id "$workspace_id" --json >/dev/null 2>&1; then
+  elif command -v jq >/dev/null 2>&1 && [[ -s "$PROFILE_DIR/alinavigator-mcp.yaml" ]]; then
+    tunnel_id="$(awk '$1 == "tunnel_id:" {gsub(/"/, "", $2); print $2; exit}' "$PROFILE_DIR/alinavigator-mcp.yaml")"
+    if [[ "$tunnel_id" =~ ^tunnel_[0-9a-f]{32}$ ]] && \
+       tunnel-client admin tunnels get "$tunnel_id" --admin-key "file:$ADMIN_KEY" --json >/dev/null 2>&1; then
       echo "Local MCP Admin key: tunnel management OK"
     else
       echo "Local MCP Admin key: tunnel management NG"
