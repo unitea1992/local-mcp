@@ -1,6 +1,7 @@
 # local-mcpの責務
 
-開発環境・worktree・agent orchestrationはT3 Codeが担当します。このリポジトリは開発Hubを提供せず、独立して維持するSecure MCP Tunnelとローカルサービスの構成を管理します。
+開発環境・worktree・agent orchestrationはT3 Codeが担当します。このリポジトリは開発Hubを提供せず、
+独立して維持するSecure MCP Tunnelとローカルサービスの構成を管理します。
 
 ## AliNavigator Tunnel
 
@@ -11,7 +12,9 @@
 
 ## 開発作業
 
-リポジトリの変更はT3 Codeで対象projectを選び、threadとworktreeを使って進めます。定期実行はT3 Codeのscheduled taskに登録します。Orca CLI、Orca Run/Task/Dispatch ID、Orca Codexify Skillは現行構成の依存ではありません。
+リポジトリの変更はT3 Codeで対象projectを選び、threadとworktreeを使って進めます。
+定期実行はT3 Codeのscheduled taskに登録します。Orca CLI、Run/Task/Dispatch ID、
+Orca Codexify Skillは現行構成の依存ではありません。
 
 ## 旧設計資料
 

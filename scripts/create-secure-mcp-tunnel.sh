@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -lt 2 || $# -gt 3 ]]; then
-  echo "usage: $0 <name> <description> [scope-tunnel-id]" >&2
+if [[ $# -ne 2 && $# -ne 3 && $# -ne 4 ]]; then
+  echo "usage: $0 <name> <description> [scope-tunnel-id | organization-id workspace-id]" >&2
   exit 2
 fi
 
@@ -11,7 +11,6 @@ description="$2"
 scope_tunnel_id="${3:-}"
 runtime_key="$HOME/.config/local-mcp/runtime-api-key"
 admin_key="$HOME/.config/local-mcp/admin-api-key"
-codexify_config="${CODEXIFY_CONFIG:-$HOME/.codexify/codexify.config.json}"
 
 for command in tunnel-client jq; do
   command -v "$command" >/dev/null 2>&1 || { echo "$command が見つかりません。" >&2; exit 1; }
@@ -25,17 +24,22 @@ for secret in "$runtime_key" "$admin_key"; do
   }
 done
 
-if [[ -z "$scope_tunnel_id" ]]; then
-  [[ -f "$codexify_config" ]] || { echo "Codexify configが見つかりません: $codexify_config" >&2; exit 1; }
-  scope_tunnel_id="$(jq -r '.openaiTunnel.tunnelId // .openaiTunnels[0].tunnelId // empty' "$codexify_config")"
+organization_id=""
+workspace_id=""
+if [[ $# -eq 3 ]]; then
+  scope_tunnel_id="$3"
+  [[ "$scope_tunnel_id" =~ ^tunnel_[0-9a-f]{32}$ ]] || { echo "scope Tunnel IDの形式が不正です。" >&2; exit 1; }
+  metadata="$(tunnel-client admin tunnels get "$scope_tunnel_id" --admin-key "file:$runtime_key" --json)"
+  organization_id="$(jq -r '.organization_ids[0] // empty' <<<"$metadata")"
+  workspace_id="$(jq -r '.workspace_ids[0] // empty' <<<"$metadata")"
+elif [[ $# -eq 4 ]]; then
+  organization_id="$3"
+  workspace_id="$4"
 fi
-
-[[ "$scope_tunnel_id" =~ ^tunnel_[0-9a-f]{32}$ ]] || { echo "scope Tunnel IDを取得できませんでした。" >&2; exit 1; }
-
-metadata="$(tunnel-client admin tunnels get "$scope_tunnel_id" --admin-key "file:$runtime_key" --json)"
-organization_id="$(jq -r '.organization_ids[0] // empty' <<<"$metadata")"
-workspace_id="$(jq -r '.workspace_ids[0] // empty' <<<"$metadata")"
-[[ -n "$organization_id" && -n "$workspace_id" ]] || { echo "scope TunnelからOrganization / Workspaceを取得できませんでした。" >&2; exit 1; }
+[[ "$organization_id" =~ ^[A-Za-z0-9_-]+$ && "$workspace_id" =~ ^[A-Za-z0-9_-]+$ ]] || {
+  echo "有効なOrganization / Workspace IDを、scope Tunnel IDまたは明示指定してください。" >&2
+  exit 1
+}
 
 existing="$(tunnel-client admin tunnels list --admin-key "file:$admin_key" --workspace-id "$workspace_id" --json)"
 existing_id="$(jq -r --arg name "$name" '[.tunnels[]? | select(.name == $name) | .id][0] // empty' <<<"$existing")"

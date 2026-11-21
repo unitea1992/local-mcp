@@ -3,7 +3,9 @@
 ChatGPTからローカル開発環境へ接続する経路と、独立して残すSecure MCP Tunnelの運用を管理するリポジトリです。
 個人利用を第一に、独自runtimeを増やさず既存実装を組み合わせます。
 
-開発・worktree・エージェント実行はT3 Codeへ移行済みです。このリポジトリはAliNavigator向けなど独立したSecure MCP Tunnelのprofile、systemd、診断を管理します。Orca CLI／Codexify経由の開発Hubは現行経路に含みません。
+開発・worktree・エージェント実行はT3 Codeへ移行済みです。
+このリポジトリはAliNavigator向けなど独立したSecure MCP Tunnelのprofile、systemd、診断を管理します。
+Orca CLI／Codexify経由の開発Hubは現行経路に含みません。
 
 開発の変更はT3 Codeの対象プロジェクトで行い、T3 Codeのworktree・thread・scheduled task機能を使います。
 
@@ -20,13 +22,12 @@ ChatGPTからローカル開発環境へ接続する経路と、独立して残�
 
 ## AliNavigator Tunnel
 
-AliNavigator MCP本体はalinavigator-api側で管理します。Tunnel作成時のOrganization / Workspace scopeは
-CodexifyのTunnelから継承します。
+AliNavigator MCP本体はalinavigator-api側で管理します。Tunnel作成時のOrganization / Workspace scopeは明示指定するか、管理権限のある既存Tunnelから取得します。
 
 ## 秘密情報はGitに入れない
 
 Runtime API keyは `~/.config/local-mcp/runtime-api-key` に置き、Gitへ保存しません。
-CodexifyとAliNavigator Tunnelは同じRestricted keyを参照でき、TunnelsのRead + Useだけを持たせます。
+Runtime keyはTunnelsのRead + Useを持たせます。
 
 AliNavigatorのGateway Access資格情報は `~/.config/local-mcp/alinavigator.env` に分離し、Gitへ保存しません。
 Runtime / Admin API keyは現在のユーザー所有・mode 600で管理します。
